@@ -25,7 +25,7 @@ class QBRawGuard(_PluginBase):
     """
     plugin_name = "原盘通知"
     plugin_desc = "智能拦截 BDVM / ISO / DVD 原盘种子，事件驱动秒级响应 + 定时扫描兜底；命中后联动清理下载文件与入库记录，杜绝 Emby 无法播放的媒体污染。"
-    plugin_icon = "https://cdn-icons-png.flaticon.com/512/564/564619.png"
+    plugin_icon = "https://raw.githubusercontent.com/miss82824352235/MoviePilot-Plugins/main/icons/QBRawGuard.png"
     plugin_version = "2.6.1"
     plugin_author = "MoviePilot Agent"
     author_url = "https://github.com/jxxghp/MoviePilot/pull/5687"
@@ -78,7 +78,7 @@ class QBRawGuard(_PluginBase):
         "retry_failed": True,
         "notify": True,
         "notify_type": "Agent",
-        "alert_image": "https://cdn-icons-png.flaticon.com/512/564/564619.png",
+        "alert_image": "https://raw.githubusercontent.com/miss82824352235/MoviePilot-Plugins/main/icons/QBRawGuard.png",
         "test_title": "阿凡达：火与烬 (2025)",
         "test_subtitle": "Avatar Fire and Ash 2025 2160p UHD Blu-ray DoVi HDR10 HEVC TrueHD 7.1-Thor@HDSky",
         "test_site": "馒头",
@@ -1194,7 +1194,7 @@ class QBRawGuard(_PluginBase):
             "downloaders": [], "interval": 2, "full_interval": 0,
             "action": "stop", "notify": True, "notify_type": "Agent", "tag": "原盘拦截",
             "include_completed": True, "retry_failed": True,
-            "alert_image": "https://cdn-icons-png.flaticon.com/512/564/564619.png",
+            "alert_image": "https://raw.githubusercontent.com/miss82824352235/MoviePilot-Plugins/main/icons/QBRawGuard.png",
             "test_message": "站点：馒头\n质量：UHD HDR10 DoVi 2160p\n大小：92.61G\n种子：Avatar Fire and Ash 2025 2160p UHD Blu-ray DoVi HDR10 HEVC TrueHD 7.1-Thor@HDSky\n发布时间：2026-06-02 06:03:02\n做种数：111\n促销：50%\nHit&Run：否\n标签：中字 4k 中配 hdr10 DoVi\n描述：阿凡达：火与烬 / 阿凡达3 / 阿凡达3：带种者 / 阿凡达3：火与灰 / 阿凡达3：火与烬 【UHD原盘 DIY国语DTS配音 官译简繁粤/双语字幕】",
             "test_title": "阿凡达：火与烬 (2025)",
             "test_subtitle": "Avatar Fire and Ash 2025 2160p UHD Blu-ray DoVi HDR10 HEVC TrueHD 7.1-Thor@HDSky",
