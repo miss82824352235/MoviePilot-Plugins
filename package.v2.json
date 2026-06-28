@@ -3,7 +3,7 @@
     "name": "原盘通知",
     "description": "智能拦截 BDVM / ISO / DVD 原盘种子，事件驱动秒级响应 + 定时扫描兜底；命中后联动清理下载文件与入库记录，杜绝 Emby 无法播放的媒体污染。",
     "icon": "https://raw.githubusercontent.com/miss82824352235/MoviePilot-Plugins/main/icons/QBRawGuard.png",
-    "version": "2.6.1",
+    "version": "2.7.0",
     "author": "MoviePilot Agent",
     "level": 2,
     "labels": "下载管理,通知",
@@ -16,6 +16,10 @@
       "v2.5.0": "P0 缺陷修复(通知回退值/表单默认值/健康检查)；延迟回扫机制清理孤儿入库记录；四件套联动清理；快速拦截+全量兜底双模式独立开关"
     },
     "release": true,
-    "v2": true
+    "v2": true,
+    "id": "QBRawGuard",
+    "desc": "智能拦截 BDVM / ISO / DVD 原盘种子，事件驱动秒级响应；命中后基于媒体管理系统彻底清理所有关联痕迹，杜绝 Emby 无法播放的媒体污染。",
+    "repo_url": "https://github.com/miss82824352235/MoviePilot-Plugins",
+    "update_time": "2026-06-28 16:00:00"
   }
 }
