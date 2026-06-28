@@ -15,18 +15,17 @@ from app.core.config import settings
 class QBRawGuard(_PluginBase):
     """
     ============================================================
-    原盘通知 v2.6.1 — 事件驱动秒级拦截 · 定时扫描兜底 · 延迟回扫清理
+    原盘通知 v2.7.0 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
     ============================================================
     事件驱动（DownloadAdded）：新种子秒级响应，不受标题预检限制
     快速拦截（Fast）：标题预检 → 文件结构正则匹配 → 命中处理
-    全量兜底（Full）：低频补漏，默认关闭，按需开启
-    延迟回扫：清理拦截后异步产生的孤儿入库记录
+    彻底清理：基于媒体管理系统查找并删除所有关联痕迹（转移记录、下载历史、媒体库文件）
     ============================================================
     """
     plugin_name = "原盘通知"
-    plugin_desc = "智能拦截 BDVM / ISO / DVD 原盘种子，事件驱动秒级响应 + 定时扫描兜底；命中后联动清理下载文件与入库记录，杜绝 Emby 无法播放的媒体污染。"
+    plugin_desc = "智能拦截 BDVM / ISO / DVD 原盘种子，事件驱动秒级响应；命中后基于媒体管理系统彻底清理所有关联痕迹，杜绝 Emby 无法播放的媒体污染。"
     plugin_icon = "https://raw.githubusercontent.com/miss82824352235/MoviePilot-Plugins/main/icons/QBRawGuard.png"
-    plugin_version = "2.6.1"
+    plugin_version = "2.7.0"
     plugin_author = "MoviePilot Agent"
     author_url = "https://github.com/jxxghp/MoviePilot/pull/5687"
     plugin_config_prefix = "qbrawguard_"
@@ -68,17 +67,15 @@ class QBRawGuard(_PluginBase):
     CONFIG_DEFAULTS = {
         "enabled": False,
         "fast_scan_enabled": True,
-        "full_scan_enabled": False,
         "downloaders": [],
         "interval": 2,
-        "full_interval": 0,
         "action": "stop",
         "tag": "原盘拦截",
         "include_completed": True,
         "retry_failed": True,
         "notify": True,
         "notify_type": "Agent",
-        "alert_image": "https://raw.githubusercontent.com/miss82824352235/MoviePilot-Plugins/main/icons/QBRawGuard.png",
+        "alert_image": "https://cdn-icons-png.flaticon.com/512/564/564619.png",
         "test_title": "阿凡达：火与烬 (2025)",
         "test_subtitle": "Avatar Fire and Ash 2025 2160p UHD Blu-ray DoVi HDR10 HEVC TrueHD 7.1-Thor@HDSky",
         "test_site": "馒头",
@@ -118,7 +115,6 @@ class QBRawGuard(_PluginBase):
 
         # 后置归一化与边界处理
         self.interval = max(self.interval, 1)
-        self.full_interval = max(self.full_interval, 0)
         if self.action not in ("stop", "delete"):
             self.action = "stop"
         if not self.alert_image:
@@ -131,13 +127,9 @@ class QBRawGuard(_PluginBase):
         self.processed = self.get_data("processed") or {}
         self._survivors: set = set()
         self._fast_running = False
-        self._full_running = False
-        self._rescan_running = False
         self._lock = threading.Lock()
         self._cleaning: set = set()
         self._oplog: list = self.get_data("oplog") or []
-        # 延迟回扫队列：{hash: {name, downloader, attempts, next_ts, first_ts, total_cleaned, idle_rounds}}
-        self._rescan_queue: dict = self.get_data("rescan_queue") or {}
         # 状态检查缓存（避免 get_page 每次请求都查 DB）
         self._status_cache = {"ts": 0, "checks": None}
 
@@ -168,8 +160,8 @@ class QBRawGuard(_PluginBase):
             "endpoint": self._manual_rescan_api,
             "methods": ["GET"],
             "auth": "apikey",
-            "summary": "手动回扫孤儿入库记录",
-            "description": "对所有 processed 中已成功删除的种子，重新清理后续产生的转移记录与硬链接",
+            "summary": "手动彻底清理关联痕迹",
+            "description": "对所有已拦截的种子，基于媒体管理系统查找并删除所有关联痕迹（转移记录、下载历史、媒体库文件）",
         }]
 
     def _test_notify(self) -> dict:
@@ -203,24 +195,38 @@ class QBRawGuard(_PluginBase):
             return {"success": False, "message": f"发送失败：{e}"}
 
     def _manual_rescan_api(self) -> dict:
-        """手动触发一次全量回扫，清理已拦截种子的孤儿入库记录。"""
+        """手动触发一次彻底清理，查找并删除所有已拦截种子的关联痕迹。"""
         try:
-            cleaned = self._manual_rescan()
-            if cleaned > 0:
-                msg = f"手动回扫完成，清理 {cleaned} 条孤儿入库记录"
+            total_cleaned = 0
+            for h, info in list(self.processed.items()):
+                if info.get("action") != "delete":
+                    continue
+                
+                # 收集媒体管理中的所有关联项
+                media_items = self._collect_media_items(h, info.get("name", ""))
+                
+                # 删除媒体管理中的关联项
+                cleaned = self._delete_media_items(media_items)
+                total_cleaned += cleaned
+                
+                if cleaned > 0:
+                    logger.info(f"{self.plugin_name} 手动清理 {self._short_name(info.get('name', ''))}：{cleaned}项")
+            
+            if total_cleaned > 0:
+                msg = f"手动彻底清理完成，删除 {total_cleaned} 项关联痕迹"
                 logger.info(f"{self.plugin_name} {msg}")
             else:
-                msg = "手动回扫完成，未发现孤儿入库记录"
-            return {"success": True, "message": msg, "cleaned": cleaned}
+                msg = "手动彻底清理完成，未发现关联痕迹"
+            
+            self._add_oplog("手动清理", 0, 0, 0, total_cleaned, sample="manual")
+            return {"success": True, "message": msg, "cleaned": total_cleaned}
         except Exception as e:
-            logger.error(f"{self.plugin_name} 手动回扫失败：{e}")
-            return {"success": False, "message": f"手动回扫失败：{e}"}
+            logger.error(f"{self.plugin_name} 手动彻底清理失败：{e}")
+            return {"success": False, "message": f"手动彻底清理失败：{e}"}
 
     def stop_service(self):
         with self._lock:
             self._fast_running = False
-            self._full_running = False
-            self._rescan_running = False
 
     # ═══════════════════════════════════════════════════════════
     # 类级懒加载工具（避免每次扫描/回扫重复实例化）
@@ -256,26 +262,10 @@ class QBRawGuard(_PluginBase):
                 "func": self._run_fast_scan,
                 "kwargs": {"seconds": max(self.interval, 1) * 60},
             })
-        if self.full_scan_enabled:
-            sec = (self.full_interval * 60) if self.full_interval > 0 else max(self.interval * 5 * 60, 150)
-            services.append({
-                "id": "QBRawGuardFull", "name": "QB原盘全量兜底", "trigger": "interval",
-                "func": self._run_full_scan,
-                "kwargs": {"seconds": sec},
-            })
-        # 延迟回扫：清理拦截后异步产生的孤儿入库记录
-        services.append({
-            "id": "QBRawGuardRescan", "name": "QB原盘孤儿回扫", "trigger": "interval",
-            "func": self._run_orphan_rescan,
-            "kwargs": {"seconds": 30},
-        })
         return services
 
     def _run_fast_scan(self):
         self._run_locked("_fast_running", self._scan, "fast")
-
-    def _run_full_scan(self):
-        self._run_locked("_full_running", self._scan, "full")
 
     def _run_locked(self, flag: str, func, *args):
         """通用单例运行包装：避免同名任务并发执行。"""
@@ -288,15 +278,6 @@ class QBRawGuard(_PluginBase):
         finally:
             with self._lock:
                 setattr(self, flag, False)
-
-    def _do_orphan_rescan_safe(self):
-        """带空队列短路的回扫入口。"""
-        if not self._rescan_queue:
-            return
-        try:
-            self._do_orphan_rescan()
-        except Exception as e:
-            logger.error(f"{self.plugin_name} 延迟回扫异常：{e}")
 
     # ═══════════════════════════════════════════════════════════
     # 核心扫描
@@ -502,11 +483,19 @@ class QBRawGuard(_PluginBase):
     # ═══════════════════════════════════════════════════════════
 
     def _full_cleanup(self, downloader: str, h: str, name: str, matched: List[str]):
+        """彻底清理：基于媒体管理系统删除所有关联痕迹"""
         try:
-            cleaned_ids = set()
-            for history in (self._to.list_by_hash(h) or []):
-                self._clean_one(history, h, name, self._sc, self._to)
-                cleaned_ids.add(history.id)
+            # 1. 收集媒体管理中的所有关联项
+            media_items = self._collect_media_items(h, name)
+            logger.info(f"{self.plugin_name} 收集到媒体项目：{len(media_items.get('transfer_records', []))}条转移记录，"
+                       f"{len(media_items.get('download_records', []))}条下载记录，"
+                       f"{len(media_items.get('library_files', []))}个媒体库文件")
+            
+            # 2. 删除媒体管理中的关联项
+            media_deleted = self._delete_media_items(media_items)
+            logger.info(f"{self.plugin_name} 删除媒体项目：{media_deleted}项")
+            
+            # 3. 删除下载器任务和文件
             deleted = False
             svc = self._get_service(downloader)
             if svc and svc.instance:
@@ -516,14 +505,18 @@ class QBRawGuard(_PluginBase):
                     self.chain.remove_torrents(hashs=[h], delete_file=True, downloader=downloader)
             else:
                 self.chain.remove_torrents(hashs=[h], delete_file=True, downloader=downloader)
+            
+            # 4. 验证删除结果
             time.sleep(2)
             deleted = self._torrent_gone(downloader, h)
             if not deleted:
                 logger.warning(f"{self.plugin_name} 删除后任务仍存在，将保留失败状态等待下次重试：{self._short_name(name)}")
+            
+            # 5. 记录清理结果
             with self._lock:
                 if h in self.processed:
                     self.processed[h]["ok"] = deleted
-                    self.processed[h]["cleaned"] = len(cleaned_ids)
+                    self.processed[h]["media_deleted"] = media_deleted
                     self.processed[h]["time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     if not deleted:
                         self.processed[h]["err"] = "删除后任务仍在下载器中"
@@ -531,11 +524,13 @@ class QBRawGuard(_PluginBase):
                         self.processed[h].pop("err", None)
                     self.save_data("processed", self.processed)
                 self._cleaning.discard(h)
-                # 入队延迟回扫：清理 MoviePilot 整理流程后续产生的孤儿入库记录
-                if deleted:
-                    self._enqueue_rescan(h, name, downloader, initial_cleaned=len(cleaned_ids))
+                
+                # 记录操作日志
+                self._add_oplog("彻底清理", 0, 0, 0, media_deleted, 
+                              sample=self._short_name(name))
+                
         except Exception as e:
-            logger.error(f"{self.plugin_name} 四件套异常 [{self._short_name(name)}]: {e}")
+            logger.error(f"{self.plugin_name} 彻底清理异常 [{self._short_name(name)}]: {e}")
             with self._lock:
                 self._cleaning.discard(h)
 
@@ -574,129 +569,134 @@ class QBRawGuard(_PluginBase):
         except Exception:
             pass
 
-    # ═══════════════════════════════════════════════════════════
-    # 延迟回扫：清理 QBRawGuard 拦截后异步产生的孤儿入库记录
-    # ═══════════════════════════════════════════════════════════
-    # 回扫节奏：30s/120s/300s/600s/1200s/1800s 共 6 次；每次扫到非 0 条则重置 idle_rounds；
-    # 连续 2 轮无新增或总计超 60 分钟自动出队，避免长期占用。
-
-    RESCAN_INTERVALS = [30, 90, 180, 300, 600, 900, 900, 900]  # 累计 ~ 65 分钟
-    RESCAN_MAX_LIFETIME = 60 * 60  # 60 分钟兜底
-    RESCAN_MAX_IDLE_ROUNDS = 2  # 连续 2 轮 0 新增则出队
-
-    def _enqueue_rescan(self, h: str, name: str, downloader: str, initial_cleaned: int = 0):
-        """把 hash 加入延迟回扫队列。"""
-        if not h:
-            return
-        now = time.time()
-        item = self._rescan_queue.get(h) or {}
-        item.update({
-            "name": name,
-            "downloader": downloader,
-            "attempts": item.get("attempts", 0),
-            "first_ts": item.get("first_ts", now),
-            "next_ts": now + self.RESCAN_INTERVALS[0],
-            "total_cleaned": item.get("total_cleaned", initial_cleaned),
-            "idle_rounds": 0,
-        })
-        self._rescan_queue[h] = item
-        self.save_data("rescan_queue", self._rescan_queue)
-        logger.info(f"{self.plugin_name} 入队延迟回扫：{self._short_name(name)}（首扫 {self.RESCAN_INTERVALS[0]}s 后）")
-
-    def _run_orphan_rescan(self):
-        """兼容旧调度入口（外部可能仍引用），实际调用 _run_locked。"""
-        self._run_locked("_rescan_running", self._do_orphan_rescan_safe)
-
-    def _do_orphan_rescan(self):
-        now = time.time()
-        # 取快照避免迭代时修改
-        with self._lock:
-            queue_snapshot = list(self._rescan_queue.items())
-        changed = False
-        for h, item in queue_snapshot:
-            try:
-                if now < item.get("next_ts", 0):
-                    continue
-                age = now - item.get("first_ts", now)
-                # 执行一次回扫
-                cleaned = self._rescan_once(h, item)
-                attempts = item.get("attempts", 0) + 1
-                idle_rounds = item.get("idle_rounds", 0)
-                if cleaned > 0:
-                    idle_rounds = 0
-                    item["last_cleaned_ts"] = now
-                    item["total_cleaned"] = item.get("total_cleaned", 0) + cleaned
-                    logger.info(f"{self.plugin_name} 延迟回扫命中：{self._short_name(item.get('name', ''))} 清理 {cleaned} 条孤儿记录")
-                    self._add_oplog("延迟回扫", 0, 0, 0, cleaned, sample=self._short_name(item.get("name", "")))
-                else:
-                    idle_rounds += 1
-                item["attempts"] = attempts
-                item["idle_rounds"] = idle_rounds
-                # 出队条件
-                give_up = age > self.RESCAN_MAX_LIFETIME or idle_rounds >= self.RESCAN_MAX_IDLE_ROUNDS or attempts >= len(self.RESCAN_INTERVALS)
-                if give_up:
-                    with self._lock:
-                        self._rescan_queue.pop(h, None)
-                    total = item.get("total_cleaned", 0)
-                    if total > 0:
-                        logger.info(f"{self.plugin_name} 延迟回扫完成：{self._short_name(item.get('name', ''))} 累计清理 {total} 条")
-                    changed = True
-                else:
-                    # 安排下一次
-                    interval = self.RESCAN_INTERVALS[min(attempts, len(self.RESCAN_INTERVALS) - 1)]
-                    item["next_ts"] = now + interval
-                    with self._lock:
-                        self._rescan_queue[h] = item
-                    changed = True
-            except Exception as e:
-                logger.warning(f"{self.plugin_name} 单项回扫异常：{e}")
-        if changed:
-            self.save_data("rescan_queue", self._rescan_queue)
-
-    def _rescan_once(self, h: str, item: dict) -> int:
-        """执行单次回扫：通过 download_hash 精准查找未清理的转移记录并清理。"""
-        cleaned = 0
-        name = item.get("name", "")
+    def _collect_media_items(self, hash: str, name: str) -> dict:
+        """从媒体管理系统中查找所有关联记录"""
+        items = {
+            "transfer_records": [],
+            "download_records": [], 
+            "library_files": []
+        }
+        
         try:
-            histories = self._to.list_by_hash(h) or []
-            for history in histories:
+            from app.db.transferhistory_oper import TransferHistoryOper
+            from app.db.downloadhistory_oper import DownloadHistoryOper
+            from app.chain.mediaserver import MediaServerChain
+            
+            to = TransferHistoryOper()
+            dh = DownloadHistoryOper()
+            ms = MediaServerChain()
+            
+            # 1. 按哈希查转移历史（最准确）
+            items["transfer_records"] = to.list_by_hash(hash) or []
+            
+            # 2. 按哈希查下载历史
+            items["download_records"] = dh.get_by_hash(hash) or []
+            
+            # 3. 按核心标题查媒体库文件（兜底）
+            core_name = self._extract_core_name(name)
+            year = self._extract_year(name)
+            if core_name:
                 try:
-                    self._clean_one(history, h, name, self._sc, self._to)
-                    cleaned += 1
-                except Exception as e:
-                    logger.warning(f"{self.plugin_name} 回扫清理记录失败 id={getattr(history, 'id', '?')}：{e}")
+                    library_items = ms.media_exists(
+                        title=core_name,
+                        year=year
+                    )
+                    items["library_files"] = library_items or []
+                except Exception:
+                    pass
+            
         except Exception as e:
-            logger.warning(f"{self.plugin_name} 回扫查询失败：{e}")
-        return cleaned
+            logger.warning(f"{self.plugin_name} 收集媒体项目异常：{e}")
+        
+        return items
 
-    def _manual_rescan(self) -> int:
-        """手动触发一次全量回扫（也清理 processed 中已删任务遗留的转移记录）。"""
-        cleaned_total = 0
-        # 遍历 processed 中所有 delete 模式的种子，按 hash 查转移记录。
-        # 即使 ok=false（删除时报失败），任务也可能后续被手动清掉，留下孤儿记录，仍需回扫。
-        for h, info in list(self.processed.items()):
-            if info.get("action") != "delete":
-                continue
+    def _extract_core_name(self, torrent_name: str) -> str:
+        """提取种子名核心英文名"""
+        if not torrent_name:
+            return ""
+        
+        # 移除站点前缀 [MT], [HDS], [HDSky] 等
+        import re
+        name = re.sub(r'^\[[^\]]+\]', '', torrent_name)
+        
+        # 移除常见的质量/编码标记
+        patterns_to_remove = [
+            r'\b(1080p|720p|2160p|4k|uhd|bluray|blu-ray|remux|avc|hevc|h264|h265|x264|x265|'
+            r'truehd|dts|ddp|aac|ac3|atmos|dovi|dv|hdr|sdr|10bit|8bit|'
+            r'complete\.bluray|complete\.blu-ray|complete_uhd|'
+            r'bdmv|certificate|video_ts|audio_ts|hvdvd_ts|'
+            r'\.iso|\.img|\.nrg|\.mdf|\.mds|\.cue|\.bin|'
+            r'-mteam|-hds|-hdsky|-chdbits|-52pt|-pter|'
+            r'thor@hds|pete@hds|blu-ray\.diy|bluray\.diy|'
+            r'blu-ray\.avc|bluray\.avc|bluray\.remux|blu-ray\.remux)\b',
+            r'\.(mkv|mp4|ts|m2ts|iso|img|nrg|mdf|mds|cue|bin|srt|ass|ssa|sub|idx)$',
+            r'\[.*?\]',  # 移除所有方括号内容
+            r'\(.*?\)',  # 移除所有圆括号内容
+        ]
+        
+        for pattern in patterns_to_remove:
+            name = re.sub(pattern, '', name, flags=re.IGNORECASE)
+        
+        # 清理多余空格和特殊字符
+        name = re.sub(r'[._-]+', ' ', name)
+        name = re.sub(r'\s+', ' ', name)
+        name = name.strip()
+        
+        # 提取连续的英文单词（至少2个字母）
+        words = re.findall(r'\b[a-z]{2,}\b', name.lower())
+        if words:
+            return ' '.join(words).title()
+        
+        return ""
+
+    def _extract_year(self, torrent_name: str) -> str:
+        """提取年份"""
+        import re
+        match = re.search(r'\b(19\d{2}|20\d{2})\b', torrent_name)
+        return match.group(1) if match else ""
+
+    def _delete_media_items(self, media_items: dict):
+        """删除媒体管理中的所有关联项"""
+        deleted_count = 0
+        
+        # 1. 删除转移记录及对应的文件
+        for record in media_items.get("transfer_records", []):
             try:
-                histories = self._to.list_by_hash(h) or []
-                if not histories:
-                    continue
-                # 仅当下载器中已确认无该任务时才清理，避免误删运行中下载的入库
-                downloader = info.get("downloader", "")
-                if downloader and not self._torrent_gone(downloader, h):
-                    logger.info(f"{self.plugin_name} 手动回扫跳过：任务仍在下载器中 {self._short_name(info.get('name', ''))}")
-                    continue
-                for history in histories:
-                    try:
-                        self._clean_one(history, h, info.get("name", ""), self._sc, self._to)
-                        cleaned_total += 1
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-        if cleaned_total > 0:
-            self._add_oplog("手动回扫", 0, 0, 0, cleaned_total, sample="manual")
-        return cleaned_total
+                # 删除转移记录本身
+                self._to.delete(record.id)
+                
+                # 删除源文件（如果存在）
+                if record.src and record.src_fileitem:
+                    self._sc.delete_media_file(FileItem(**record.src_fileitem))
+                
+                # 删除媒体库文件（如果存在）
+                if record.dest and record.dest_fileitem:
+                    self._sc.delete_media_file(FileItem(**record.dest_fileitem))
+                
+                deleted_count += 1
+            except Exception as e:
+                logger.warning(f"{self.plugin_name} 删除转移记录失败 id={getattr(record, 'id', '?')}：{e}")
+        
+        # 2. 删除下载历史记录
+        for record in media_items.get("download_records", []):
+            try:
+                self._dh.delete(record.id)
+                deleted_count += 1
+            except Exception as e:
+                logger.warning(f"{self.plugin_name} 删除下载历史失败 id={getattr(record, 'id', '?')}：{e}")
+        
+        # 3. 删除媒体库文件（独立存在的）
+        for file_item in media_items.get("library_files", []):
+            try:
+                if isinstance(file_item, dict):
+                    self._sc.delete_media_file(FileItem(**file_item))
+                else:
+                    self._sc.delete_media_file(file_item)
+                deleted_count += 1
+            except Exception as e:
+                logger.warning(f"{self.plugin_name} 删除媒体库文件失败：{e}")
+        
+        return deleted_count
     # ═══════════════════════════════════════════════════════════
     # 通知（修复：走系统通知通道）
     # ═══════════════════════════════════════════════════════════
@@ -1194,7 +1194,7 @@ class QBRawGuard(_PluginBase):
             "downloaders": [], "interval": 2, "full_interval": 0,
             "action": "stop", "notify": True, "notify_type": "Agent", "tag": "原盘拦截",
             "include_completed": True, "retry_failed": True,
-            "alert_image": "https://raw.githubusercontent.com/miss82824352235/MoviePilot-Plugins/main/icons/QBRawGuard.png",
+            "alert_image": "https://cdn-icons-png.flaticon.com/512/564/564619.png",
             "test_message": "站点：馒头\n质量：UHD HDR10 DoVi 2160p\n大小：92.61G\n种子：Avatar Fire and Ash 2025 2160p UHD Blu-ray DoVi HDR10 HEVC TrueHD 7.1-Thor@HDSky\n发布时间：2026-06-02 06:03:02\n做种数：111\n促销：50%\nHit&Run：否\n标签：中字 4k 中配 hdr10 DoVi\n描述：阿凡达：火与烬 / 阿凡达3 / 阿凡达3：带种者 / 阿凡达3：火与灰 / 阿凡达3：火与烬 【UHD原盘 DIY国语DTS配音 官译简繁粤/双语字幕】",
             "test_title": "阿凡达：火与烬 (2025)",
             "test_subtitle": "Avatar Fire and Ash 2025 2160p UHD Blu-ray DoVi HDR10 HEVC TrueHD 7.1-Thor@HDSky",
