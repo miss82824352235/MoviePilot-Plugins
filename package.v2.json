@@ -3,16 +3,16 @@
     "name": "原盘通知",
     "description": "智能拦截 BDVM / ISO / DVD 原盘种子，事件驱动秒级响应；命中后基于媒体管理系统彻底清理所有关联痕迹，杜绝 Emby 无法播放的媒体污染。",
     "labels": "下载管理,媒体整理",
-    "version": "2.8.7",
+    "version": "2.8.8",
     "icon": "https://raw.githubusercontent.com/miss82824352235/MoviePilot-Plugins/main/icons/QBRawGuard.png",
     "author": "MoviePilot Agent",
     "level": 1,
     "history": {
+      "v2.8.8": "清理旧兼容风险入口：删除 _clean_one/_collect_media_items/_extract_core_name/_extract_year/_delete_media_items，彻底移除按种子名提取标题/年份后自动删除媒体库的旧路径；README_AGENT 增加已移除风险路径说明，自动清理只按 download_hash 精确关联。",
       "v2.8.7": "审计修复：修复文件列表读取方法误标 staticmethod 导致扫描/事件读取真实文件列表 TypeError 的核心问题；将 full_scan_enabled/full_interval 纳入 CONFIG_DEFAULTS，确保配置、状态、调度一致；优化手动清理按钮文案与风险提示；测试通知描述泛化为 MP 通知场景。",
       "v2.8.6": "前端显示优化：UI 改为更符合 MoviePilot 原生风格的 tonal VCard/VAlert/VTabs 布局，减少自定义毛玻璃 CSS；配置页新增运行状态 Tab，将统计、健康检查和调试动作合并到设置页内，通知与测试/基本设置/高级规则分区卡片化。",
       "v2.8.5": "规范插件 API/UI：测试通知支持 POST，手动回扫改为 POST；UI 按钮移除 settings.API_TOKEN 拼接，改用插件 API 原生鉴权事件；补齐 full_scan_enabled/full_interval 对应的 QBRawGuardFull 全量兜底调度器，避免 UI 展示假能力。",
-      "v2.8.4": "继续 AI 可维护拆分：新增 ui 模块承载详情页、配置表单和 Vuetify JSON 组件工厂，入口文件进一步瘦身；通知发送审计确认通过 _PluginBase.post_message 复用 MoviePilot 原生通知链路，notifier 仅负责正文和通知场景映射。",
-      "v2.8.3": "原生链路对齐：新增 cleaner 模块，清理逻辑按 download_hash 精确复用 MP 整理记录删除语义；下载器文件列表读取、停止、打标签、删除、删除后确认改走 MoviePilot Chain；移除按种子名猜标题自动删除媒体库路径，修复下载历史删除方法和页面回扫队列属性。"
+      "v2.8.4": "继续 AI 可维护拆分：新增 ui 模块承载详情页、配置表单和 Vuetify JSON 组件工厂，入口文件进一步瘦身；通知发送审计确认通过 _PluginBase.post_message 复用 MoviePilot 原生通知链路，notifier 仅负责正文和通知场景映射。"
     }
   }
 }
