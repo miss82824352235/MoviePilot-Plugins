@@ -10,7 +10,7 @@ QBRawGuard 常量与默认配置模块。
 from typing import Dict, Tuple
 
 
-PLUGIN_VERSION = "2.8.9"
+PLUGIN_VERSION = "2.8.10"
 
 TITLE_HINTS: Tuple[str, ...] = (
     "bdmv", "certificate", "video_ts", "audio_ts", "hvdvd_ts",
@@ -71,5 +71,5 @@ CONFIG_DEFAULTS: Dict[str, object] = {
         "描述：阿凡达：火与烬 / 阿凡达3 / 阿凡达3：带种者 / 阿凡达3：火与灰 / 阿凡达3：火与烬"
         " 【UHD原盘 DIY国语DTS配音 官译简繁粤/双语字幕】"
     ),
-    "patterns": "",
+    "patterns": DEFAULT_PATTERNS,
 }
