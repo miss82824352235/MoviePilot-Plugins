@@ -52,3 +52,21 @@ def get_file_names_with_retry(service: Any, torrent_hash: str, attempts: int = 5
         if index < attempts - 1 and delay > 0:
             time.sleep(delay)
     return last
+
+
+def get_file_names_from_chain(chain: Any, torrent_hash: str, downloader: str = None) -> List[str]:
+    """通过 MoviePilot Chain 获取下载器真实文件列表。"""
+    files = chain.torrent_files(tid=torrent_hash, downloader=downloader) or []
+    return [name for name in (normalize_file_name(item) for item in files) if name]
+
+
+def get_file_names_from_chain_with_retry(chain: Any, torrent_hash: str, downloader: str = None, attempts: int = 5, delay: float = 1.5) -> List[str]:
+    """通过 MoviePilot Chain 短轮询等待下载器真实文件列表就绪。"""
+    last: List[str] = []
+    for index in range(max(int(attempts), 1)):
+        last = get_file_names_from_chain(chain, torrent_hash, downloader)
+        if last:
+            return last
+        if index < attempts - 1 and delay > 0:
+            time.sleep(delay)
+    return last
