@@ -22,7 +22,7 @@ from .utils import clean_line, display_title, format_size, format_time, notice_i
 class QBRawGuard(_PluginBase):
     """
     ============================================================
-    原盘通知 v2.8.4 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
+    原盘通知 v2.8.5 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
     ============================================================
     事件驱动（DownloadAdded）：新种子秒级响应，不受标题预检限制
     快速拦截（Fast）：标题预检 → 文件结构正则匹配 → 命中处理
@@ -77,6 +77,7 @@ class QBRawGuard(_PluginBase):
         self.processed = self.get_data("processed") or {}
         self._survivors: set = set()
         self._fast_running = False
+        self._full_running = False
         self._lock = threading.Lock()
         self._cleaning: set = set()
         self._oplog: list = self.get_data("oplog") or []
@@ -102,14 +103,14 @@ class QBRawGuard(_PluginBase):
         return [{
             "path": "/test_notify",
             "endpoint": self._test_notify,
-            "methods": ["GET"],
+            "methods": ["GET", "POST"],
             "auth": "apikey",
             "summary": "测试原盘通知发送",
             "description": "发送一条测试通知到 Telegram，验证通知通道是否正常",
         }, {
             "path": "/manual_rescan",
             "endpoint": self._manual_rescan_api,
-            "methods": ["GET"],
+            "methods": ["POST"],
             "auth": "apikey",
             "summary": "手动彻底清理关联痕迹",
             "description": "对所有已拦截的种子，基于媒体管理系统查找并删除所有关联痕迹（转移记录、下载历史、媒体库文件）",
@@ -177,6 +178,7 @@ class QBRawGuard(_PluginBase):
     def stop_service(self):
         with self._lock:
             self._fast_running = False
+            self._full_running = False
 
     # ═══════════════════════════════════════════════════════════
     # 类级懒加载工具（避免每次扫描/回扫重复实例化）
@@ -212,10 +214,22 @@ class QBRawGuard(_PluginBase):
                 "func": self._run_fast_scan,
                 "kwargs": {"seconds": max(self.interval, 1) * 60},
             })
+        if getattr(self, "full_scan_enabled", False):
+            full_interval = int(getattr(self, "full_interval", 0) or 0)
+            if full_interval <= 0:
+                full_interval = max(self.interval, 1) * 5
+            services.append({
+                "id": "QBRawGuardFull", "name": "QB原盘全量兜底", "trigger": "interval",
+                "func": self._run_full_scan,
+                "kwargs": {"seconds": max(full_interval, 5) * 60},
+            })
         return services
 
     def _run_fast_scan(self):
         self._run_locked("_fast_running", self._scan, "fast")
+
+    def _run_full_scan(self):
+        self._run_locked("_full_running", self._scan, "full")
 
     def _run_locked(self, flag: str, func, *args):
         """通用单例运行包装：避免同名任务并发执行。"""
