@@ -13,12 +13,15 @@ from app.core.config import settings
 
 from .constants import CONFIG_DEFAULTS, DEFAULT_PATTERNS, PLUGIN_VERSION, TITLE_HINTS
 from .matcher import compile_patterns, match_raw_disc
+from .notifier import build_download_style_notice, detect_format, notification_type, safe_format_hint
+from .status import STATUS_COLOR_PROP, STATUS_TEXT_CLASS, build_check_status
+from .utils import clean_line, display_title, format_size, format_time, notice_image, short_name, site_name, suspect_name, value_of
 
 
 class QBRawGuard(_PluginBase):
     """
     ============================================================
-    原盘通知 v2.8.0 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
+    原盘通知 v2.8.1 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
     ============================================================
     事件驱动（DownloadAdded）：新种子秒级响应，不受标题预检限制
     快速拦截（Fast）：标题预检 → 文件结构正则匹配 → 命中处理
@@ -645,48 +648,17 @@ class QBRawGuard(_PluginBase):
         self.save_data("processed", self.processed)
 
     def _notification_type(self):
-        mapping = {
-            "Download": NotificationType.Download, "资源下载": NotificationType.Download,
-            "Organize": NotificationType.Organize, "整理入库": NotificationType.Organize,
-            "Plugin": NotificationType.Plugin, "插件": NotificationType.Plugin,
-            "Agent": NotificationType.Agent, "智能体": NotificationType.Agent,
-            "Other": NotificationType.Other, "其它": NotificationType.Other,
-        }
-        return mapping.get(self.notify_type, NotificationType.Agent)
+        """返回当前配置对应的 MoviePilot 通知类型。"""
+        return notification_type(self.notify_type)
 
     def _build_download_style_notice(self, name: str, matched: List[str], downloader: str = "QB",
                                      torrent: Any = None, extra: str = "", fmt: str = "") -> str:
         """构建接近 MoviePilot 下载通知的原盘拦截通知，不暴露 hash 和真实路径。"""
-        format_hint = fmt or self._detect_format(matched)
-        action = "删除" if self.action == "delete" else "停止下载"
-        lines = []
-        if extra:
-            for line in str(extra).splitlines():
-                line = line.strip()
-                if line:
-                    lines.append(line)
-        info = self._torrent_notice_info(torrent, name)
-
-        def add(label, value):
-            value = str(value or "").strip()
-            if value and not any(x.startswith(f"{label}：") for x in lines):
-                lines.append(f"{label}：{value}")
-
-        add("站点", info.get("site"))
-        add("质量", info.get("quality"))
-        add("大小", info.get("size"))
-        add("种子", info.get("torrent_title"))
-        add("发布时间", info.get("pubdate"))
-        add("做种数", info.get("seeders"))
-        add("促销", info.get("promotion"))
-        add("Hit&Run", info.get("hit_and_run"))
-        add("标签", info.get("tags") or self.tag)
-        add("描述", info.get("description"))
-        lines.append(f"判定格式：{format_hint}")
-        if matched:
-            lines.append("判定依据：" + "、".join(self._safe_format_hint(x) for x in matched[:3]))
-        lines.append(f"处理动作：{action}")
-        return "\n".join(lines)
+        return build_download_style_notice(
+            name=name, matched=matched, action=self.action,
+            torrent_info=self._torrent_notice_info(torrent, name),
+            extra=extra, fmt=fmt, fallback_tag=self.tag,
+        )
 
     def _build_notice_text(self, name: str, matched: List[str], downloader: str = "QB",
                            site: str = "未知", seeders: str = "未知", tags: str = "原盘拦截",
@@ -699,30 +671,16 @@ class QBRawGuard(_PluginBase):
         )
 
     @staticmethod
+    @staticmethod
     def _detect_format(matched: List[str]) -> str:
         """根据命中文件名归纳原盘格式。"""
-        text = " ".join(matched or []).lower()
-        if "bdmv" in text or "certificate" in text:
-            return "Blu-ray/UHD Blu-ray 原盘结构（BDMV/CERTIFICATE）"
-        if "video_ts" in text or ".ifo" in text or ".vob" in text:
-            return "DVD 原盘结构（VIDEO_TS）"
-        if any(x in text for x in (".iso", ".img", ".nrg", ".mdf", ".mds", ".cue", ".bin")):
-            return "光盘镜像文件"
-        return "Emby 可能无法直接识别的原盘结构"
+        return detect_format(matched)
 
+    @staticmethod
     @staticmethod
     def _safe_format_hint(path: str) -> str:
         """只返回格式层面的脱敏命中依据，不暴露真实路径。"""
-        lower = str(path).lower()
-        for key, label in (
-            ("bdmv", "BDMV 蓝光目录"), ("certificate", "CERTIFICATE 蓝光证书目录"),
-            ("video_ts", "VIDEO_TS DVD目录"), ("hvdvd_ts", "HVDVD_TS HD-DVD目录"),
-            (".iso", "ISO 光盘镜像"), (".img", "IMG 光盘镜像"), (".nrg", "NRG 光盘镜像"),
-            (".mdf", "MDF/MDS 光盘镜像"), (".cue", "CUE/BIN 镜像索引"), (".m2ts", "M2TS 原盘流文件"),
-        ):
-            if key in lower:
-                return label
-        return "原盘结构特征"
+        return safe_format_hint(path)
 
     def _notify(self, downloader: str, name: str, matched: List[str], torrent: Any = None):
         info = self._torrent_notice_info(torrent, name)
@@ -746,109 +704,12 @@ class QBRawGuard(_PluginBase):
     # ═══════════════════════════════════════════════════════════
 
     # 状态→Vuetify 主题色 class 映射（自动跟随浅色/深色模式）
-    _STATUS_TEXT_CLASS = {
-        "success": "text-success",
-        "warning": "text-warning",
-        "error": "text-error",
-        "info": "text-info",
-        "default": "text-medium-emphasis",
-    }
-    _STATUS_COLOR_PROP = {
-        "success": "success",
-        "warning": "warning",
-        "error": "error",
-        "info": "info",
-        "default": "grey",
-    }
+    _STATUS_TEXT_CLASS = STATUS_TEXT_CLASS
+    _STATUS_COLOR_PROP = STATUS_COLOR_PROP
 
     def _check_status(self) -> List[dict]:
-        """运行时状态检查，返回 8 个检查项。每项含 icon/label/status/text。30s 内复用缓存。"""
-        now = time.time()
-        cache = getattr(self, "_status_cache", {"ts": 0, "checks": None})
-        if cache.get("checks") and (now - cache["ts"]) < 30:
-            return cache["checks"]
-        checks = []
-        on, fast, full = self.enabled, self.fast_scan_enabled, self.full_scan_enabled
-
-        def push(icon, label, ok, text_on, text_off="已关闭", warn=None):
-            if warn is not None:
-                status = "warning"
-                text = warn
-            elif ok:
-                status, text = "success", text_on
-            else:
-                status, text = "default", text_off
-            checks.append({"icon": icon, "label": label, "status": status, "text": text})
-
-        push("mdi-power-plug", "插件状态", on, "已启用", "已停用")
-        push("mdi-lightning-bolt", "快速拦截", on and fast, f"每 {self.interval} 分钟")
-        full_min = self.full_interval if self.full_interval > 0 else self.interval * 5
-        push("mdi-shield-check", "全量兜底", on and full, f"每 {full_min} 分钟")
-
-        # 下载器
-        try:
-            svcs = self._services()
-            if svcs:
-                push("mdi-download", "QB下载器", True, "、".join(svcs.keys()) + " 已连接")
-            else:
-                push("mdi-download-off", "QB下载器", False, "", "未配置")
-                checks[-1]["status"] = "error"
-                checks[-1]["text"] = "无可用 Qbittorrent"
-        except Exception as e:
-            checks.append({"icon": "mdi-download-off", "label": "QB下载器", "status": "error", "text": str(e)})
-
-        # 通知通道
-        try:
-            from app.helper.service import ServiceConfigHelper
-            switches = ServiceConfigHelper.get_notification_switches() or []
-            configs = ServiceConfigHelper.get_notification_configs() or []
-            nt = self._notification_type()
-            expected_type = nt.value
-
-            # 优先查通知场景开关
-            switch = next((s for s in switches if s.type == expected_type and s.action and s.action != "none"), None)
-            # 再查通知渠道中是否包含该场景
-            enabled_configs = [c for c in configs if c.enabled and expected_type in (c.switchs or [])]
-            if switch:
-                action_label = {"all": "全部", "user": "仅用户", "admin": "仅管理"}.get(switch.action, switch.action)
-                ch_names = "、".join([c.name for c in enabled_configs]) if enabled_configs else "通知渠道"
-                push("mdi-bell-ring", "通知通道", True, f"「{expected_type}」→ {action_label}（{ch_names}）")
-            elif enabled_configs:
-                ch_names = "、".join([c.name for c in enabled_configs])
-                push("mdi-bell-ring", "通知通道", True, f"「{expected_type}」→ 已配置（{ch_names}）")
-            elif not switches and not configs:
-                checks.append({"icon": "mdi-bell-off", "label": "通知通道",
-                               "status": "error", "text": "未配置通知场景与通知渠道"})
-            else:
-                available = [s.type for s in switches if s.action and s.action != "none"]
-                if not available:
-                    available = [c.name for c in configs if c.enabled]
-                checks.append({"icon": "mdi-bell-off", "label": "通知通道",
-                               "status": "warning",
-                               "text": f"「{expected_type}」未开启（可用: {', '.join(available[:5])}）"})
-        except Exception as e:
-            checks.append({"icon": "mdi-bell-off", "label": "通知通道", "status": "error", "text": str(e)})
-
-        # 事件驱动
-        push("mdi-flash", "事件拦截", on, "监听 DownloadAdded", "跟随插件")
-
-        # 正则有效性
-        valid = sum(1 for r in self.regex if r)
-        if valid > 0:
-            push("mdi-regex", "识别规则", True, f"{valid} 条规则就绪")
-        else:
-            checks.append({"icon": "mdi-regex", "label": "识别规则", "status": "error", "text": "无有效规则"})
-
-        # 拦截统计
-        total_hits = sum(1 for v in (self.processed or {}).values() if v.get("matched"))
-        if total_hits > 0:
-            checks.append({"icon": "mdi-alert-octagon", "label": "历史拦截",
-                           "status": "info", "text": f"累计 {total_hits} 次命中"})
-        else:
-            checks.append({"icon": "mdi-alert-octagon", "label": "历史拦截",
-                           "status": "default", "text": "暂未命中"})
-        self._status_cache = {"ts": now, "checks": checks}
-        return checks
+        """运行时状态检查，返回首页/设置页展示用检查项。"""
+        return build_check_status(self, self._services, self._notification_type)
 
     # ═══════════════════════════════════════════════════════════
     # 操作日志
@@ -967,83 +828,54 @@ class QBRawGuard(_PluginBase):
         return None
 
     @staticmethod
+    @staticmethod
     def _clean_line(value: Any) -> str:
-        text = str(value or "").replace("\r", " ").replace("\n", " ").strip()
-        return re.sub(r"\s+", " ", text)[:240]
+        """清理通知单行文本。"""
+        return clean_line(value)
 
+    @staticmethod
     @staticmethod
     def _fmt_size(value: Any) -> str:
-        try:
-            size = float(value or 0)
-            if size <= 0:
-                return ""
-            for unit in ("B", "K", "M", "G", "T"):
-                if size < 1024 or unit == "T":
-                    return f"{size:.2f}{unit}" if unit != "B" else f"{int(size)}B"
-                size /= 1024
-        except Exception:
-            return str(value or "")
+        """格式化文件大小。"""
+        return format_size(value)
 
+    @staticmethod
     @staticmethod
     def _fmt_time(value: Any) -> str:
-        try:
-            if value in (None, ""):
-                return ""
-            value = float(value)
-            if value > 0:
-                return datetime.fromtimestamp(value).strftime("%Y-%m-%d %H:%M:%S")
-        except Exception:
-            return str(value or "")[:19]
-        return ""
+        """格式化时间戳。"""
+        return format_time(value)
 
+    @staticmethod
     @staticmethod
     def _site_name(value: Any) -> str:
-        text = str(value or "").strip()
-        if not text:
-            return ""
-        if "://" in text:
-            text = text.split("://", 1)[-1].split("/", 1)[0]
-        return text[:80]
+        """提取站点显示名。"""
+        return site_name(value)
 
+    @staticmethod
     @staticmethod
     def _display_title(name: str) -> str:
-        text = str(name or "").strip()
-        text = re.sub(r"[._]+", " ", text)
-        text = re.sub(r"\s+", " ", text)
-        return text[:80] or "下载任务"
+        """生成通知标题显示名。"""
+        return display_title(name)
 
     def _suspect_name(self, name: str) -> bool:
-        """标题预检：只用于快速拦截降噪，事件驱动和全量兜底不依赖它。"""
-        text = str(name or "").lower()
-        if not text:
-            return False
-        return any(hint in text for hint in self.TITLE_HINTS)
+        """标题预检：只用于快速拦截降噪，最终命中必须来自真实文件列表。"""
+        return suspect_name(name, self.TITLE_HINTS)
 
     def _notice_image(self) -> str:
-        """通知图片兜底。MoviePilot 当前 ImageHelper 不支持本地 file 路径，空值走纯文本，避免 Telegram 发送失败。"""
-        image = str(getattr(self, "alert_image", "") or "").strip()
-        if image.startswith("file://") or image.startswith("/"):
-            return ""
-        return image
+        """通知图片兜底。"""
+        return notice_image(getattr(self, "alert_image", ""))
 
+    @staticmethod
     @staticmethod
     def _short_name(name: str) -> str:
-        return (name[:60] + "…") if len(name) > 60 else name
+        """返回适合日志展示的短名称。"""
+        return short_name(name)
 
     @staticmethod
+    @staticmethod
     def _val(obj: Any, *keys: str) -> Any:
-        for key in keys:
-            if isinstance(obj, dict) and key in obj:
-                return obj[key]
-            if hasattr(obj, key):
-                return getattr(obj, key)
-            try:
-                val = obj.get(key)
-                if val is not None:
-                    return val
-            except Exception:
-                pass
-        return None
+        """按字段名从 dict 或对象中读取值。"""
+        return value_of(obj, *keys)
 
     # ═══════════════════════════════════════════════════════════
     # 集成仪表盘 get_page()
