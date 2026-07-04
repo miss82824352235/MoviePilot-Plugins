@@ -7,12 +7,12 @@ from typing import Any, Dict, List, Tuple, Optional
 from app.helper.downloader import DownloaderHelper
 from app.log import logger
 from app.plugins import _PluginBase
-from app.schemas.file import FileItem
 from app.schemas.types import EventType, NotificationType
 from app.core.config import settings
 
+from .cleaner import cleanup_by_hash
 from .constants import CONFIG_DEFAULTS, DEFAULT_PATTERNS, PLUGIN_VERSION, TITLE_HINTS
-from .downloader import get_file_names, get_file_names_with_retry
+from .downloader import get_file_names_from_chain, get_file_names_from_chain_with_retry
 from .matcher import compile_patterns, match_raw_disc
 from .notifier import build_download_style_notice, detect_format, notification_type, safe_format_hint
 from .status import STATUS_COLOR_PROP, STATUS_TEXT_CLASS, build_check_status
@@ -22,7 +22,7 @@ from .utils import clean_line, display_title, format_size, format_time, notice_i
 class QBRawGuard(_PluginBase):
     """
     ============================================================
-    原盘通知 v2.8.2 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
+    原盘通知 v2.8.3 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
     ============================================================
     事件驱动（DownloadAdded）：新种子秒级响应，不受标题预检限制
     快速拦截（Fast）：标题预检 → 文件结构正则匹配 → 命中处理
@@ -80,6 +80,7 @@ class QBRawGuard(_PluginBase):
         self._lock = threading.Lock()
         self._cleaning: set = set()
         self._oplog: list = self.get_data("oplog") or []
+        self._rescan_queue: dict = self.get_data("rescan_queue") or {}
         # 状态检查缓存（避免 get_page 每次请求都查 DB）
         self._status_cache = {"ts": 0, "checks": None}
 
@@ -145,31 +146,30 @@ class QBRawGuard(_PluginBase):
             return {"success": False, "message": f"发送失败：{e}"}
 
     def _manual_rescan_api(self) -> dict:
-        """手动触发一次彻底清理，查找并删除所有已拦截种子的关联痕迹。"""
+        """手动触发一次 MP 原生语义清理，只按 hash 精确清理关联记录。"""
         try:
             total_cleaned = 0
+            errors = []
             for h, info in list(self.processed.items()):
                 if info.get("action") != "delete":
                     continue
-                
-                # 收集媒体管理中的所有关联项
-                media_items = self._collect_media_items(h, info.get("name", ""))
-                
-                # 删除媒体管理中的关联项
-                cleaned = self._delete_media_items(media_items)
-                total_cleaned += cleaned
-                
-                if cleaned > 0:
-                    logger.info(f"{self.plugin_name} 手动清理 {self._short_name(info.get('name', ''))}：{cleaned}项")
-            
+                # 手动回扫通常发生在下载器任务已处理后，允许清理残留源文件。
+                result = cleanup_by_hash(h, delete_src=True, delete_dest=True, eventmanager=self.eventmanager)
+                total_cleaned += result.total
+                errors.extend(result.errors)
+                if result.total > 0:
+                    logger.info(f"{self.plugin_name} 手动清理 {self._short_name(info.get('name', ''))}：{result.total}项")
+
             if total_cleaned > 0:
                 msg = f"手动彻底清理完成，删除 {total_cleaned} 项关联痕迹"
                 logger.info(f"{self.plugin_name} {msg}")
             else:
                 msg = "手动彻底清理完成，未发现关联痕迹"
-            
-            self._add_oplog("手动清理", 0, 0, 0, total_cleaned, sample="manual")
-            return {"success": True, "message": msg, "cleaned": total_cleaned}
+            if errors:
+                msg += f"，异常 {len(errors)} 项"
+
+            self._add_oplog("手动清理", 0, 0, 0, total_cleaned, sample="manual", err="; ".join(errors[:2]))
+            return {"success": not errors, "message": msg, "cleaned": total_cleaned, "errors": errors[:5]}
         except Exception as e:
             logger.error(f"{self.plugin_name} 手动彻底清理失败：{e}")
             return {"success": False, "message": f"手动彻底清理失败：{e}"}
@@ -377,14 +377,14 @@ class QBRawGuard(_PluginBase):
             self._survivors = set(list(self._survivors)[-3000:])
 
     @staticmethod
-    def _file_names(service: Any, h: str, downloader: str) -> List[str]:
-        """读取下载器真实文件列表；原盘判定不得直接使用种子名。"""
-        return get_file_names(service, h)
+    def _file_names(self, service: Any, h: str, downloader: str) -> List[str]:
+        """通过 MoviePilot Chain 读取下载器真实文件列表；原盘判定不得直接使用种子名。"""
+        return get_file_names_from_chain(self.chain, h, downloader)
 
     @staticmethod
-    def _file_names_with_retry(service: Any, h: str, downloader: str) -> List[str]:
-        """事件触发后短轮询等待真实文件列表就绪，避免空列表误判安全。"""
-        return get_file_names_with_retry(service, h, attempts=5, delay=1.5)
+    def _file_names_with_retry(self, service: Any, h: str, downloader: str) -> List[str]:
+        """事件触发后通过 MoviePilot Chain 短轮询等待真实文件列表就绪。"""
+        return get_file_names_from_chain_with_retry(self.chain, h, downloader, attempts=5, delay=1.5)
 
     # ═══════════════════════════════════════════════════════════
     # 匹配
@@ -414,10 +414,10 @@ class QBRawGuard(_PluginBase):
             self._record(h, downloader, name, matched, False)
             self._full_cleanup(downloader, h, name, matched)
         else:
-            ok = bool(service.instance.stop_torrents(ids=h))
+            ok = bool(self.chain.stop_torrents(hashs=[h], downloader=downloader))
             if self.tag:
                 try:
-                    service.instance.set_torrents_tag(ids=h, tags=[self.tag])
+                    self.chain.set_torrents_tag(hashs=[h], tags=[self.tag], downloader=downloader)
                 except Exception:
                     pass
             self._record(h, downloader, name, matched, ok)
@@ -431,52 +431,51 @@ class QBRawGuard(_PluginBase):
     # ═══════════════════════════════════════════════════════════
 
     def _full_cleanup(self, downloader: str, h: str, name: str, matched: List[str]):
-        """彻底清理：基于媒体管理系统删除所有关联痕迹"""
+        """彻底清理：复用 MP Chain 与整理记录删除语义清理关联痕迹。"""
         try:
-            # 1. 收集媒体管理中的所有关联项
-            media_items = self._collect_media_items(h, name)
-            logger.info(f"{self.plugin_name} 收集到媒体项目：{len(media_items.get('transfer_records', []))}条转移记录，"
-                       f"{len(media_items.get('download_records', []))}条下载记录，"
-                       f"{len(media_items.get('library_files', []))}个媒体库文件")
-            
-            # 2. 删除媒体管理中的关联项
-            media_deleted = self._delete_media_items(media_items)
-            logger.info(f"{self.plugin_name} 删除媒体项目：{media_deleted}项")
-            
-            # 3. 删除下载器任务和文件
-            deleted = False
-            svc = self._get_service(downloader)
-            if svc and svc.instance:
-                try:
-                    svc.instance.delete_torrents(delete_file=True, ids=h)
-                except Exception:
-                    self.chain.remove_torrents(hashs=[h], delete_file=True, downloader=downloader)
-            else:
+            # 先暂停，降低整理链路继续处理原盘任务的概率。
+            try:
+                self.chain.stop_torrents(hashs=[h], downloader=downloader)
+            except Exception as err:
+                logger.debug(f"{self.plugin_name} 删除前暂停任务失败：{err}")
+
+            # MP 侧只按 hash 精确清理，目标媒体库文件和转移记录走 MP 整理记录删除语义；
+            # 源文件交给 remove_torrents(delete_file=True)，避免重复删除。
+            clean_result = cleanup_by_hash(h, delete_src=False, delete_dest=True, eventmanager=self.eventmanager)
+            media_deleted = clean_result.total
+            logger.info(
+                f"{self.plugin_name} MP侧清理：转移记录 {clean_result.transfer_records}，"
+                f"媒体库文件 {clean_result.dest_files}，下载历史 {clean_result.download_histories}，"
+                f"下载文件记录 {clean_result.download_files}"
+            )
+            for err in clean_result.errors[:3]:
+                logger.warning(f"{self.plugin_name} MP侧清理异常：{err}")
+
+            # 下载器任务和源文件删除统一走 MoviePilot 下载器 Chain。
+            try:
                 self.chain.remove_torrents(hashs=[h], delete_file=True, downloader=downloader)
-            
-            # 4. 验证删除结果
+            except Exception as err:
+                logger.warning(f"{self.plugin_name} 删除下载器任务异常：{err}")
+
             time.sleep(2)
             deleted = self._torrent_gone(downloader, h)
             if not deleted:
                 logger.warning(f"{self.plugin_name} 删除后任务仍存在，将保留失败状态等待下次重试：{self._short_name(name)}")
-            
-            # 5. 记录清理结果
+
             with self._lock:
                 if h in self.processed:
-                    self.processed[h]["ok"] = deleted
+                    self.processed[h]["ok"] = deleted and not clean_result.errors
                     self.processed[h]["media_deleted"] = media_deleted
                     self.processed[h]["time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     if not deleted:
                         self.processed[h]["err"] = "删除后任务仍在下载器中"
+                    elif clean_result.errors:
+                        self.processed[h]["err"] = "; ".join(clean_result.errors[:2])
                     else:
                         self.processed[h].pop("err", None)
                     self.save_data("processed", self.processed)
                 self._cleaning.discard(h)
-                
-                # 记录操作日志
-                self._add_oplog("彻底清理", 0, 0, 0, media_deleted, 
-                              sample=self._short_name(name))
-                
+                self._add_oplog("彻底清理", 0, 0, 0, media_deleted, sample=self._short_name(name))
         except Exception as e:
             logger.error(f"{self.plugin_name} 彻底清理异常 [{self._short_name(name)}]: {e}")
             with self._lock:
@@ -485,78 +484,30 @@ class QBRawGuard(_PluginBase):
     def _torrent_gone(self, downloader: str, h: str) -> bool:
         """确认任务是否已从下载器消失，避免误把删除失败标记为成功。"""
         try:
-            svc = self._get_service(downloader)
-            if not svc or not svc.instance:
-                return False
-            torrents, err = svc.instance.get_torrents(ids=h)
-            if err:
-                logger.warning(f"{self.plugin_name} 删除结果确认失败：{err}")
-                return False
+            torrents = self.chain.list_torrents(hashs=[h], downloader=downloader, include_all_tags=True)
             return not torrents
         except Exception as e:
             logger.warning(f"{self.plugin_name} 删除结果确认异常：{e}")
             return False
 
     def _clean_one(self, history, h: str, name: str, storage_chain, oper):
-        hid = history.id
-        if history.dest and history.dest_fileitem:
-            try:
-                storage_chain.delete_media_file(FileItem(**history.dest_fileitem))
-            except Exception:
-                pass
-        if history.src and history.src_fileitem:
-            try:
-                storage_chain.delete_media_file(FileItem(**history.src_fileitem))
-            except Exception:
-                pass
-        self.eventmanager.send_event(EventType.DownloadFileDeleted, {
-            "hash": history.download_hash or h, "src": history.src or name,
-        })
-        try:
-            oper.delete(hid)
-        except Exception:
-            pass
+        """兼容旧入口：单条整理历史清理已由 cleaner.py 承担。"""
+        result = cleanup_by_hash(getattr(history, "download_hash", "") or h, delete_src=True, delete_dest=True, eventmanager=self.eventmanager)
+        return result.total
 
     def _collect_media_items(self, hash: str, name: str) -> dict:
-        """从媒体管理系统中查找所有关联记录"""
-        items = {
-            "transfer_records": [],
-            "download_records": [], 
-            "library_files": []
-        }
-        
+        """兼容旧入口：只按 hash 收集可自动清理的 MP 关联记录。"""
         try:
             from app.db.transferhistory_oper import TransferHistoryOper
             from app.db.downloadhistory_oper import DownloadHistoryOper
-            from app.chain.mediaserver import MediaServerChain
-            
-            to = TransferHistoryOper()
-            dh = DownloadHistoryOper()
-            ms = MediaServerChain()
-            
-            # 1. 按哈希查转移历史（最准确）
-            items["transfer_records"] = to.list_by_hash(hash) or []
-            
-            # 2. 按哈希查下载历史
-            items["download_records"] = dh.get_by_hash(hash) or []
-            
-            # 3. 按核心标题查媒体库文件（兜底）
-            core_name = self._extract_core_name(name)
-            year = self._extract_year(name)
-            if core_name:
-                try:
-                    library_items = ms.media_exists(
-                        title=core_name,
-                        year=year
-                    )
-                    items["library_files"] = library_items or []
-                except Exception:
-                    pass
-            
+            return {
+                "transfer_records": TransferHistoryOper().list_by_hash(hash) or [],
+                "download_records": [h for h in [DownloadHistoryOper().get_by_hash(hash)] if h],
+                "library_files": [],
+            }
         except Exception as e:
             logger.warning(f"{self.plugin_name} 收集媒体项目异常：{e}")
-        
-        return items
+            return {"transfer_records": [], "download_records": [], "library_files": []}
 
     def _extract_core_name(self, torrent_name: str) -> str:
         """提取种子名核心英文名"""
@@ -604,46 +555,20 @@ class QBRawGuard(_PluginBase):
         return match.group(1) if match else ""
 
     def _delete_media_items(self, media_items: dict):
-        """删除媒体管理中的所有关联项"""
+        """兼容旧入口：清理逻辑已迁移到 cleaner.py，避免按标题猜测删除媒体库文件。"""
         deleted_count = 0
-        
-        # 1. 删除转移记录及对应的文件
         for record in media_items.get("transfer_records", []):
-            try:
-                # 删除转移记录本身
-                self._to.delete(record.id)
-                
-                # 删除源文件（如果存在）
-                if record.src and record.src_fileitem:
-                    self._sc.delete_media_file(FileItem(**record.src_fileitem))
-                
-                # 删除媒体库文件（如果存在）
-                if record.dest and record.dest_fileitem:
-                    self._sc.delete_media_file(FileItem(**record.dest_fileitem))
-                
-                deleted_count += 1
-            except Exception as e:
-                logger.warning(f"{self.plugin_name} 删除转移记录失败 id={getattr(record, 'id', '?')}：{e}")
-        
-        # 2. 删除下载历史记录
+            h = getattr(record, "download_hash", "")
+            if h:
+                result = cleanup_by_hash(h, delete_src=True, delete_dest=True, eventmanager=self.eventmanager)
+                deleted_count += result.total
         for record in media_items.get("download_records", []):
             try:
-                self._dh.delete(record.id)
+                from app.db.downloadhistory_oper import DownloadHistoryOper
+                DownloadHistoryOper().delete_history(record.id)
                 deleted_count += 1
             except Exception as e:
                 logger.warning(f"{self.plugin_name} 删除下载历史失败 id={getattr(record, 'id', '?')}：{e}")
-        
-        # 3. 删除媒体库文件（独立存在的）
-        for file_item in media_items.get("library_files", []):
-            try:
-                if isinstance(file_item, dict):
-                    self._sc.delete_media_file(FileItem(**file_item))
-                else:
-                    self._sc.delete_media_file(file_item)
-                deleted_count += 1
-            except Exception as e:
-                logger.warning(f"{self.plugin_name} 删除媒体库文件失败：{e}")
-        
         return deleted_count
     # ═══════════════════════════════════════════════════════════
     # 通知（修复：走系统通知通道）
