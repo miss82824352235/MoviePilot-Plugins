@@ -7,7 +7,7 @@ QBRawGuard 通知构造模块。
 3. 通知正文只展示格式依据，不暴露 hash 和真实绝对路径。
 """
 
-from typing import Any, Callable, Dict, List
+from typing import Any, Dict, List
 
 from app.schemas.types import NotificationType
 
