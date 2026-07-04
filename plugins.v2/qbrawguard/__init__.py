@@ -12,6 +12,7 @@ from app.schemas.types import EventType, NotificationType
 from app.core.config import settings
 
 from .constants import CONFIG_DEFAULTS, DEFAULT_PATTERNS, PLUGIN_VERSION, TITLE_HINTS
+from .downloader import get_file_names, get_file_names_with_retry
 from .matcher import compile_patterns, match_raw_disc
 from .notifier import build_download_style_notice, detect_format, notification_type, safe_format_hint
 from .status import STATUS_COLOR_PROP, STATUS_TEXT_CLASS, build_check_status
@@ -21,7 +22,7 @@ from .utils import clean_line, display_title, format_size, format_time, notice_i
 class QBRawGuard(_PluginBase):
     """
     ============================================================
-    原盘通知 v2.8.1 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
+    原盘通知 v2.8.2 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
     ============================================================
     事件驱动（DownloadAdded）：新种子秒级响应，不受标题预检限制
     快速拦截（Fast）：标题预检 → 文件结构正则匹配 → 命中处理
@@ -267,6 +268,9 @@ class QBRawGuard(_PluginBase):
                     checked += 1
                     try:
                         files = self._file_names(service, h, downloader)
+                        if not files:
+                            logger.debug(f"{self.plugin_name} {label} 跳过文件列表未就绪任务：{self._short_name(name)}")
+                            continue
                         matched = self._match(files)
                         if matched:
                             hits += 1
@@ -303,7 +307,11 @@ class QBRawGuard(_PluginBase):
         if not service:
             return
         try:
-            matched = self._match(self._file_names(service, h, downloader))
+            files = self._file_names_with_retry(service, h, downloader)
+            if not files:
+                logger.debug(f"{self.plugin_name} 事件触发后文件列表仍未就绪，等待定时扫描兜底：{h[:8]}")
+                return
+            matched = self._match(files)
             if not matched:
                 return
             torrents, err = service.instance.get_torrents(ids=h)
@@ -370,9 +378,13 @@ class QBRawGuard(_PluginBase):
 
     @staticmethod
     def _file_names(service: Any, h: str, downloader: str) -> List[str]:
-        return [str(f.get("name") or f.get("path", "")).replace("\\", "/")
-                for f in (service.instance.get_files(h) or [])
-                if f.get("name") or f.get("path")]
+        """读取下载器真实文件列表；原盘判定不得直接使用种子名。"""
+        return get_file_names(service, h)
+
+    @staticmethod
+    def _file_names_with_retry(service: Any, h: str, downloader: str) -> List[str]:
+        """事件触发后短轮询等待真实文件列表就绪，避免空列表误判安全。"""
+        return get_file_names_with_retry(service, h, attempts=5, delay=1.5)
 
     # ═══════════════════════════════════════════════════════════
     # 匹配
