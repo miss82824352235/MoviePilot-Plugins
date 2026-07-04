@@ -19,7 +19,7 @@
 1. 先读本文件确认模块边界。
 2. 读 `__init__.py` 的 `on_download_added()`、`_scan()`、`_hit()` 理解当前主链路。
 3. 判定误报/漏报时读 `constants.py` 与 `matcher.py`。
-4. 清理问题读 `__init__.py` 的 `_full_cleanup()`、`_collect_media_items()`、`_delete_media_items()`。
+4. 清理问题读 `cleaner.py` 和 `__init__.py` 的 `_full_cleanup()`；自动清理只按 download_hash 精确关联。
 5. 通知问题读 `notifier.py` 和 `__init__.py` 的 `_notify()`；发送动作通过 `_PluginBase.post_message()` 复用 MP 原生通知链路。
 6. UI 问题读 `ui.py`，入口 `__init__.py` 只保留 `get_page()` / `get_form()` 委托。
 
@@ -55,3 +55,9 @@ DownloadAdded 事件 / QBRawGuardFast 定时扫描
 - `constants.py` 禁止访问运行时状态。
 - `models.py` 禁止引入 MoviePilot 重型依赖。
 - `__init__.py` 新增复杂逻辑前，应优先考虑是否属于 downloader / cleaner / notifier / ui / status。
+
+## 已移除的风险路径
+
+- 旧的按种子名提取标题/年份自动删除媒体库逻辑已移除。
+- 自动清理只能按 `download_hash` 关联的 TransferHistory / DownloadHistory 执行。
+- 如需兜底查媒体库，只能做只读提示，不应自动删除。
