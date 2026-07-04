@@ -18,6 +18,7 @@
 
 1. 先读本文件确认模块边界。
 2. 读 `orchestrator.py` 的 `scan()`、`handle_download_added()`、`hit()`、`full_cleanup()` 理解当前主链路。
+3. 延迟残留清理读 `rescan.py` 的 `enqueue_rescan()`、`run_orphan_rescan()`。
 3. 判定误报/漏报时读 `constants.py` 与 `matcher.py`。
 4. 清理问题读 `cleaner.py` 和 `__init__.py` 的 `_full_cleanup()`；自动清理只按 download_hash 精确关联。
 5. 通知问题读 `notifier.py` 和 `__init__.py` 的 `_notify()`；发送动作通过 `_PluginBase.post_message()` 复用 MP 原生通知链路。
@@ -32,6 +33,7 @@ DownloadAdded 事件 / QBRawGuardFast 定时扫描
 → _hit()
 → stop 或 delete
 → cleaner.cleanup_by_hash() 按 MP 原生整理删除语义清理 MP 侧记录和媒体库目标文件
+→ rescan.enqueue_rescan() 加入自动延迟回扫队列
 → post_message() 发送通知
 ```
 
