@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Tuple, Optional
 from app.helper.downloader import DownloaderHelper
 from app.log import logger
 from app.plugins import _PluginBase
-from app.schemas.types import EventType, NotificationType
+from app.schemas.types import EventType
 
 from .constants import CONFIG_DEFAULTS, DEFAULT_PATTERNS, PLUGIN_VERSION, TITLE_HINTS
 from .downloader import get_file_names_from_chain, get_file_names_from_chain_with_retry
@@ -22,7 +22,7 @@ from .utils import clean_line, display_title, format_size, format_time, notice_i
 class QBRawGuard(_PluginBase):
     """
     ============================================================
-    原盘通知 v2.8.9 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
+    原盘通知 v2.8.10 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
     ============================================================
     事件驱动（DownloadAdded）：新种子秒级响应，不受标题预检限制
     快速拦截（Fast）：标题预检 → 文件结构正则匹配 → 命中处理
@@ -184,21 +184,7 @@ class QBRawGuard(_PluginBase):
     # 类级懒加载工具（避免每次扫描/回扫重复实例化）
     # ═══════════════════════════════════════════════════════════
 
-    @property
-    def _sc(self):
-        """懒加载 StorageChain 实例，线程安全（只读操作）。"""
-        if not hasattr(self, "__sc"):
-            from app.chain.storage import StorageChain
-            self.__sc = StorageChain()
-        return self.__sc
 
-    @property
-    def _to(self):
-        """懒加载 TransferHistoryOper 实例。"""
-        if not hasattr(self, "__to"):
-            from app.db.transferhistory_oper import TransferHistoryOper
-            self.__to = TransferHistoryOper()
-        return self.__to
 
     # ═══════════════════════════════════════════════════════════
     # 调度器
@@ -386,23 +372,12 @@ class QBRawGuard(_PluginBase):
             extra=extra, fmt=fmt, fallback_tag=self.tag,
         )
 
-    def _build_notice_text(self, name: str, matched: List[str], downloader: str = "QB",
-                           site: str = "未知", seeders: str = "未知", tags: str = "原盘拦截",
-                           subtitle: str = "", fmt: str = "", action: str = "", extra: str = "") -> str:
-        """兼容旧调用，内部转为下载通知融合样式。"""
-        return self._build_download_style_notice(
-            name=name, matched=matched, downloader=downloader,
-            torrent={"name": subtitle or name, "site": site, "num_seeds": seeders, "tags": tags},
-            extra=extra, fmt=fmt,
-        )
 
-    @staticmethod
     @staticmethod
     def _detect_format(matched: List[str]) -> str:
         """根据命中文件名归纳原盘格式。"""
         return detect_format(matched)
 
-    @staticmethod
     @staticmethod
     def _safe_format_hint(path: str) -> str:
         """只返回格式层面的脱敏命中依据，不暴露真实路径。"""
@@ -554,30 +529,25 @@ class QBRawGuard(_PluginBase):
         return None
 
     @staticmethod
-    @staticmethod
     def _clean_line(value: Any) -> str:
         """清理通知单行文本。"""
         return clean_line(value)
 
-    @staticmethod
     @staticmethod
     def _fmt_size(value: Any) -> str:
         """格式化文件大小。"""
         return format_size(value)
 
     @staticmethod
-    @staticmethod
     def _fmt_time(value: Any) -> str:
         """格式化时间戳。"""
         return format_time(value)
 
     @staticmethod
-    @staticmethod
     def _site_name(value: Any) -> str:
         """提取站点显示名。"""
         return site_name(value)
 
-    @staticmethod
     @staticmethod
     def _display_title(name: str) -> str:
         """生成通知标题显示名。"""
@@ -592,12 +562,10 @@ class QBRawGuard(_PluginBase):
         return notice_image(getattr(self, "alert_image", ""))
 
     @staticmethod
-    @staticmethod
     def _short_name(name: str) -> str:
         """返回适合日志展示的短名称。"""
         return short_name(name)
 
-    @staticmethod
     @staticmethod
     def _val(obj: Any, *keys: str) -> Any:
         """按字段名从 dict 或对象中读取值。"""
@@ -608,14 +576,6 @@ class QBRawGuard(_PluginBase):
     #  Apple Liquid Glass 风格 · 统计 + 健康检查 + 操作
     # ═══════════════════════════════════════════════════════════
 
-    def _glass_card_style(self, blur: int = 14, opacity: float = 0.55) -> str:
-        """液态玻璃卡片 CSS（半透明 + 毛玻璃模糊 + 微妙边框）。"""
-        return (
-            f"background: rgba(var(--v-theme-surface), {opacity}); "
-            f"backdrop-filter: blur({blur}px); "
-            f"-webkit-backdrop-filter: blur({blur}px); "
-            f"border: 1px solid rgba(var(--v-theme-on-surface), 0.06);"
-        )
 
     # ═══════════════════════════════════════════════════════════
     # 首页（get_page）：统计概览 + 健康检查 + 可交互操作按钮
