@@ -30,7 +30,7 @@ class QBRawGuard(_PluginBase):
     ============================================================
     """
     plugin_name = "原盘通知"
-    plugin_desc = "智能拦截 BDVM / ISO / DVD 原盘种子，事件驱动秒级响应；命中后基于媒体管理系统彻底清理所有关联痕迹，杜绝 Emby 无法播放的媒体污染。"
+    plugin_desc = "智能拦截 BDMV / ISO / DVD 原盘种子，事件驱动秒级响应；命中后基于媒体管理系统彻底清理所有关联痕迹，杜绝 Emby 无法播放的媒体污染。"
     plugin_icon = "https://raw.githubusercontent.com/miss82824352235/MoviePilot-Plugins/main/icons/QBRawGuard.png"
     plugin_version = PLUGIN_VERSION
     plugin_author = "MoviePilot Agent"
