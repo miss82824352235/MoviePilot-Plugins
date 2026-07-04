@@ -22,7 +22,7 @@ from .utils import clean_line, display_title, format_size, format_time, notice_i
 class QBRawGuard(_PluginBase):
     """
     ============================================================
-    原盘通知 v2.8.7 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
+    原盘通知 v2.8.8 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
     ============================================================
     事件驱动（DownloadAdded）：新种子秒级响应，不受标题预检限制
     快速拦截（Fast）：标题预检 → 文件结构正则匹配 → 命中处理
@@ -502,86 +502,10 @@ class QBRawGuard(_PluginBase):
             logger.warning(f"{self.plugin_name} 删除结果确认异常：{e}")
             return False
 
-    def _clean_one(self, history, h: str, name: str, storage_chain, oper):
-        """兼容旧入口：单条整理历史清理已由 cleaner.py 承担。"""
-        result = cleanup_by_hash(getattr(history, "download_hash", "") or h, delete_src=True, delete_dest=True, eventmanager=self.eventmanager)
-        return result.total
 
-    def _collect_media_items(self, hash: str, name: str) -> dict:
-        """兼容旧入口：只按 hash 收集可自动清理的 MP 关联记录。"""
-        try:
-            from app.db.transferhistory_oper import TransferHistoryOper
-            from app.db.downloadhistory_oper import DownloadHistoryOper
-            return {
-                "transfer_records": TransferHistoryOper().list_by_hash(hash) or [],
-                "download_records": [h for h in [DownloadHistoryOper().get_by_hash(hash)] if h],
-                "library_files": [],
-            }
-        except Exception as e:
-            logger.warning(f"{self.plugin_name} 收集媒体项目异常：{e}")
-            return {"transfer_records": [], "download_records": [], "library_files": []}
 
-    def _extract_core_name(self, torrent_name: str) -> str:
-        """提取种子名核心英文名"""
-        if not torrent_name:
-            return ""
-        
-        # 移除站点前缀 [MT], [HDS], [HDSky] 等
-        import re
-        name = re.sub(r'^\[[^\]]+\]', '', torrent_name)
-        
-        # 移除常见的质量/编码标记
-        patterns_to_remove = [
-            r'\b(1080p|720p|2160p|4k|uhd|bluray|blu-ray|remux|avc|hevc|h264|h265|x264|x265|'
-            r'truehd|dts|ddp|aac|ac3|atmos|dovi|dv|hdr|sdr|10bit|8bit|'
-            r'complete\.bluray|complete\.blu-ray|complete_uhd|'
-            r'bdmv|certificate|video_ts|audio_ts|hvdvd_ts|'
-            r'\.iso|\.img|\.nrg|\.mdf|\.mds|\.cue|\.bin|'
-            r'-mteam|-hds|-hdsky|-chdbits|-52pt|-pter|'
-            r'thor@hds|pete@hds|blu-ray\.diy|bluray\.diy|'
-            r'blu-ray\.avc|bluray\.avc|bluray\.remux|blu-ray\.remux)\b',
-            r'\.(mkv|mp4|ts|m2ts|iso|img|nrg|mdf|mds|cue|bin|srt|ass|ssa|sub|idx)$',
-            r'\[.*?\]',  # 移除所有方括号内容
-            r'\(.*?\)',  # 移除所有圆括号内容
-        ]
-        
-        for pattern in patterns_to_remove:
-            name = re.sub(pattern, '', name, flags=re.IGNORECASE)
-        
-        # 清理多余空格和特殊字符
-        name = re.sub(r'[._-]+', ' ', name)
-        name = re.sub(r'\s+', ' ', name)
-        name = name.strip()
-        
-        # 提取连续的英文单词（至少2个字母）
-        words = re.findall(r'\b[a-z]{2,}\b', name.lower())
-        if words:
-            return ' '.join(words).title()
-        
-        return ""
 
-    def _extract_year(self, torrent_name: str) -> str:
-        """提取年份"""
-        import re
-        match = re.search(r'\b(19\d{2}|20\d{2})\b', torrent_name)
-        return match.group(1) if match else ""
 
-    def _delete_media_items(self, media_items: dict):
-        """兼容旧入口：清理逻辑已迁移到 cleaner.py，避免按标题猜测删除媒体库文件。"""
-        deleted_count = 0
-        for record in media_items.get("transfer_records", []):
-            h = getattr(record, "download_hash", "")
-            if h:
-                result = cleanup_by_hash(h, delete_src=True, delete_dest=True, eventmanager=self.eventmanager)
-                deleted_count += result.total
-        for record in media_items.get("download_records", []):
-            try:
-                from app.db.downloadhistory_oper import DownloadHistoryOper
-                DownloadHistoryOper().delete_history(record.id)
-                deleted_count += 1
-            except Exception as e:
-                logger.warning(f"{self.plugin_name} 删除下载历史失败 id={getattr(record, 'id', '?')}：{e}")
-        return deleted_count
     # ═══════════════════════════════════════════════════════════
     # 通知（修复：走系统通知通道）
     # ═══════════════════════════════════════════════════════════
