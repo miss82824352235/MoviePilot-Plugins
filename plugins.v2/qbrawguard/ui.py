@@ -9,8 +9,6 @@ QBRawGuard Vuetify JSON UI 模块。
 
 from typing import Any, Dict, List, Tuple
 
-from app.core.config import settings
-
 
 def build_page(plugin: Any) -> List[dict]:
     """构建插件详情首页。"""
@@ -225,13 +223,13 @@ def health_row(plugin: Any, checks: List[dict]) -> dict:
     ]}
 
 
-def action_button(button_text: str, icon: str, color: str, endpoint: str) -> dict:
+def action_button(button_text: str, icon: str, color: str, endpoint: str, method: str = "post") -> dict:
     """构建操作按钮。"""
     return {"component": "VBtn", "props": {
         "color": color, "variant": "tonal", "rounded": "lg", "block": True,
         "prepend-icon": icon, "class": "text-none",
     }, "text": button_text, "events": {
-        "click": {"api": f"plugin/QBRawGuard/{endpoint}?apikey={settings.API_TOKEN}", "method": "get"}
+        "click": {"api": f"plugin/QBRawGuard/{endpoint}", "method": method}
     }}
 
 
