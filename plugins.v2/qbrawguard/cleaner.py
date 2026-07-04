@@ -44,13 +44,6 @@ def _history_id(history: Any) -> Any:
     return getattr(history, "id", None) or (history.get("id") if isinstance(history, dict) else None)
 
 
-def _fileitem_path(fileitem: Any) -> str:
-    """读取 FileItem 字典或对象中的路径。"""
-    if not fileitem:
-        return ""
-    if isinstance(fileitem, dict):
-        return str(fileitem.get("path") or "")
-    return str(getattr(fileitem, "path", "") or "")
 
 
 def _to_fileitem(fileitem: Any) -> FileItem:
