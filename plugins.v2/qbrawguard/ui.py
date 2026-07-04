@@ -22,7 +22,7 @@ def build_page(plugin: Any) -> List[dict]:
         action_row(plugin),
         {"component": "VAlert", "props": {
             "type": "info", "variant": "tonal", "density": "comfortable", "class": "mt-3",
-            "text": "原盘判定基于下载器返回的真实文件列表/目录结构；普通 Web/HDTV 单文件 .ts、扁平 .m2ts 不会作为原盘拦截。",
+            "text": "原盘判定基于下载器返回的真实文件列表/目录结构；普通 Web/HDTV 单文件 .ts、扁平 .m2ts 不会作为原盘拦截。清理按钮仅处理已拦截删除任务的 hash 关联残留。",
         }},
     ]
 
@@ -72,7 +72,7 @@ def tab_status(plugin: Any) -> list:
     return [
         {"component": "VAlert", "props": {
             "type": "info", "variant": "tonal", "density": "comfortable", "class": "mb-4",
-            "text": "这里显示当前运行状态和调试动作；真正拦截依据为下载器真实文件列表，不靠种子名简单判断。",
+            "text": "这里显示当前运行状态和调试动作；真正拦截依据为下载器真实文件列表，不靠种子名简单判断。红色清理按钮会按 hash 清理已拦截删除任务的 MP 关联残留，请谨慎点击。",
         }},
         stats_row(plugin),
         section_title("系统健康检查", "mdi-heart-pulse"),
@@ -249,7 +249,7 @@ def action_row(plugin: Any) -> dict:
     """构建调试动作按钮行。"""
     return {"component": "VRow", "content": [
         action_button("发送模拟拦截测试通知", "mdi-send", "warning", "test_notify"),
-        action_button(f"手动回扫孤儿入库（队列 {len(plugin._rescan_queue)}）", "mdi-broom", "error", "manual_rescan"),
+        action_button(f"清理已拦截删除任务残留（队列 {len(plugin._rescan_queue)}）", "mdi-broom", "error", "manual_rescan"),
     ]}
 
 
