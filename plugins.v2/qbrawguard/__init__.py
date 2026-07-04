@@ -13,7 +13,8 @@ from .constants import CONFIG_DEFAULTS, DEFAULT_PATTERNS, PLUGIN_VERSION, TITLE_
 from .downloader import get_file_names_from_chain, get_file_names_from_chain_with_retry
 from .matcher import compile_patterns, match_raw_disc
 from .notifier import build_download_style_notice, detect_format, notification_type, safe_format_hint
-from .orchestrator import full_cleanup, handle_download_added, hit, run_orphan_rescan, scan, torrent_gone
+from .orchestrator import full_cleanup, handle_download_added, hit, scan
+from .rescan import run_orphan_rescan, torrent_gone
 from .status import STATUS_COLOR_PROP, STATUS_TEXT_CLASS, build_check_status
 from .ui import build_form, build_page
 from .utils import clean_line, display_title, format_size, format_time, notice_image, short_name, site_name, suspect_name, value_of
@@ -22,7 +23,7 @@ from .utils import clean_line, display_title, format_size, format_time, notice_i
 class QBRawGuard(_PluginBase):
     """
     ============================================================
-    原盘通知 v2.8.11 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
+    原盘通知 v2.8.13 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
     ============================================================
     事件驱动（DownloadAdded）：新种子秒级响应，不受标题预检限制
     快速拦截（Fast）：标题预检 → 文件结构正则匹配 → 命中处理
@@ -224,7 +225,7 @@ class QBRawGuard(_PluginBase):
 
     def _run_orphan_rescan(self):
         """执行删除任务的自动延迟回扫。"""
-        self._run_locked("_rescan_running", run_orphan_rescan)
+        self._run_locked("_rescan_running", run_orphan_rescan, self)
 
     def _cleanup_by_hash(self, h: str, delete_src: bool = False, delete_dest: bool = True):
         """按 hash 调用 MP 原生语义清理，供主流程和回扫复用。"""
