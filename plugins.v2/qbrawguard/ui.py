@@ -35,20 +35,7 @@ def build_form(plugin: Any) -> Tuple[List[dict], Dict[str, Any]]:
     except Exception:
         opts = []
     form = [{"component": "VForm", "content": [*form_tabs(plugin, opts)]}]
-    defaults = {
-        "enabled": False, "fast_scan_enabled": True, "full_scan_enabled": False,
-        "downloaders": [], "interval": 2, "full_interval": 0,
-        "action": "stop", "notify": True, "notify_type": "Agent", "tag": "原盘拦截",
-        "include_completed": True, "retry_failed": True,
-        "alert_image": "https://cdn-icons-png.flaticon.com/512/564/564619.png",
-        "test_message": "站点：馒头\n质量：UHD HDR10 DoVi 2160p\n大小：92.61G\n种子：Avatar Fire and Ash 2025 2160p UHD Blu-ray DoVi HDR10 HEVC TrueHD 7.1-Thor@HDSky\n发布时间：2026-06-02 06:03:02\n做种数：111\n促销：50%\nHit&Run：否\n标签：中字 4k 中配 hdr10 DoVi\n描述：阿凡达：火与烬 / 阿凡达3 / 阿凡达3：带种者 / 阿凡达3：火与灰 / 阿凡达3：火与烬 【UHD原盘 DIY国语DTS配音 官译简繁粤/双语字幕】",
-        "test_title": "阿凡达：火与烬 (2025)",
-        "test_subtitle": "Avatar Fire and Ash 2025 2160p UHD Blu-ray DoVi HDR10 HEVC TrueHD 7.1-Thor@HDSky",
-        "test_site": "馒头", "test_seeders": "111",
-        "test_tags": "中字 4k 中配 hdr10 DoVi",
-        "test_format": "光盘镜像文件",
-        "patterns": plugin.DEFAULT_PATTERNS,
-    }
+    defaults = dict(plugin.CONFIG_DEFAULTS)
     return form, defaults
 
 
