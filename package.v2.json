@@ -3,17 +3,17 @@
     "name": "原盘通知",
     "description": "智能拦截 BDMV / ISO / DVD 原盘种子，事件驱动秒级响应；命中后基于媒体管理系统彻底清理所有关联痕迹，杜绝 Emby 无法播放的媒体污染。",
     "labels": "下载管理,媒体整理,原盘拦截",
-    "version": "2.8.11",
+    "version": "2.8.13",
     "icon": "https://raw.githubusercontent.com/miss82824352235/MoviePilot-Plugins/main/icons/QBRawGuard.png",
     "author": "MoviePilot Agent",
     "level": 1,
     "history": {
+      "v2.8.13": "审核拆分与回扫修复：修复自动回扫调度参数问题，避免定时任务 TypeError；新增 rescan.py 独立承载延迟回扫队列，orchestrator.py 回归主流程编排职责，保持 delete 全自动删除链路。",
       "v2.8.11": "补强全自动删除闭环：命中 delete 模式下先暂停任务，按 download_hash 清理 MP 侧媒体库目标文件、转移记录和下载历史，删除下载器任务及源文件，并新增 30 秒低频自动延迟回扫处理异步整理残留。",
       "v2.8.10": "拆分后轻量审计修复：统一 UI defaults 与 CONFIG_DEFAULTS，patterns 默认值改为单一来源；清理重复 staticmethod、未使用导入、未使用 _fileitem_path，以及旧兼容 _sc/_to/_build_notice_text/_glass_card_style，降低静态检查噪声。",
       "v2.8.9": "拆分主流程编排：新增 orchestrator 模块，承载扫描、DownloadAdded 事件处理、命中处理、删除清理和删除结果确认；入口 __init__.py 仅保留生命周期、API、调度和轻量委托，进一步提升 AI 可读性与维护定位效率。",
       "v2.8.8": "清理旧兼容风险入口：删除 _clean_one/_collect_media_items/_extract_core_name/_extract_year/_delete_media_items，彻底移除按种子名提取标题/年份后自动删除媒体库的旧路径；README_AGENT 增加已移除风险路径说明，自动清理只按 download_hash 精确关联。",
-      "v2.8.7": "审计修复：修复文件列表读取方法误标 staticmethod 导致扫描/事件读取真实文件列表 TypeError 的核心问题；将 full_scan_enabled/full_interval 纳入 CONFIG_DEFAULTS，确保配置、状态、调度一致；优化手动清理按钮文案与风险提示；测试通知描述泛化为 MP 通知场景。",
-      "v2.8.6": "前端显示优化：UI 改为更符合 MoviePilot 原生风格的 tonal VCard/VAlert/VTabs 布局，减少自定义毛玻璃 CSS；配置页新增运行状态 Tab，将统计、健康检查和调试动作合并到设置页内，通知与测试/基本设置/高级规则分区卡片化。"
+      "v2.8.7": "审计修复：修复文件列表读取方法误标 staticmethod 导致扫描/事件读取真实文件列表 TypeError 的核心问题；将 full_scan_enabled/full_interval 纳入 CONFIG_DEFAULTS，确保配置、状态、调度一致；优化手动清理按钮文案与风险提示；测试通知描述泛化为 MP 通知场景。"
     }
   }
 }
