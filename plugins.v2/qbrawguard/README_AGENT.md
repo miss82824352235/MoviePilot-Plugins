@@ -20,8 +20,8 @@
 2. 读 `__init__.py` 的 `on_download_added()`、`_scan()`、`_hit()` 理解当前主链路。
 3. 判定误报/漏报时读 `constants.py` 与 `matcher.py`。
 4. 清理问题读 `__init__.py` 的 `_full_cleanup()`、`_collect_media_items()`、`_delete_media_items()`。
-5. 通知问题读 `__init__.py` 的 `_build_download_style_notice()`、`_notification_type()`。
-6. UI 问题读 `__init__.py` 的 `get_page()`、`get_form()` 和 `_tab_*()`。
+5. 通知问题读 `notifier.py` 和 `__init__.py` 的 `_notify()`；发送动作通过 `_PluginBase.post_message()` 复用 MP 原生通知链路。
+6. UI 问题读 `ui.py`，入口 `__init__.py` 只保留 `get_page()` / `get_form()` 委托。
 
 ## 当前主链路
 
@@ -43,7 +43,7 @@ DownloadAdded 事件 / QBRawGuardFast 定时扫描
 - `downloader.py`：qBittorrent 获取文件、暂停、删除任务封装。
 - `cleaner.py`：转移历史、下载历史、媒体库文件清理。
 - `rescan.py`：延迟回扫队列。
-- `notifier.py`：通知内容构造和脱敏。
+- `notifier.py`：通知类型映射、通知内容构造和脱敏；不直接发送通知，发送必须走 `_PluginBase.post_message()`。
 - `status.py`：下载器、通知、调度器等健康检查。
 - `ui.py`：Vuetify JSON 页面与配置表单。
 
