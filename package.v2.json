@@ -1,25 +1,15 @@
 {
   "QBRawGuard": {
     "name": "原盘通知",
-    "description": "智能拦截 BDVM / ISO / DVD 原盘种子，事件驱动秒级响应 + 定时扫描兜底；命中后联动清理下载文件与入库记录，杜绝 Emby 无法播放的媒体污染。",
+    "description": "智能拦截 BDVM / ISO / DVD 原盘种子，事件驱动秒级响应；命中后基于媒体管理系统彻底清理所有关联痕迹，杜绝 Emby 无法播放的媒体污染。",
+    "labels": "下载管理,媒体整理",
+    "version": "2.8.0",
     "icon": "https://raw.githubusercontent.com/miss82824352235/MoviePilot-Plugins/main/icons/QBRawGuard.png",
-    "version": "2.7.0",
     "author": "MoviePilot Agent",
-    "level": 2,
-    "labels": "下载管理,通知",
+    "level": 1,
     "history": {
-      "v2.6.1": "设置页 Tab 分页重做：基本设置/通知与测试/运行状态/高级规则；双卡片分区通知配置；首页统计+健康检查可交互",
-      "v2.6.0": "Apple 液态玻璃 UI 风格，主题自动跟随深色/浅色模式；操作日志精简为一行摘要；_check_status 加 30s 缓存；删除不可靠的目录名回退扫描",
-      "v2.5.3": "操作日志同步写入系统日志文件；UI 日志面板改为紧凑系统日志行风格",
-      "v2.5.2": "UI 极简化：标题卡合并说明文字，健康检查+调试动作合并为系统状态区",
-      "v2.5.1": "修复 m2ts 误判：WEB-DL 的 .m2ts 流不再被误判为原盘，仅 BDMV 目录下的 m2ts/ssif 触发拦截",
-      "v2.5.0": "P0 缺陷修复(通知回退值/表单默认值/健康检查)；延迟回扫机制清理孤儿入库记录；四件套联动清理；快速拦截+全量兜底双模式独立开关"
-    },
-    "release": true,
-    "v2": true,
-    "id": "QBRawGuard",
-    "desc": "智能拦截 BDVM / ISO / DVD 原盘种子，事件驱动秒级响应；命中后基于媒体管理系统彻底清理所有关联痕迹，杜绝 Emby 无法播放的媒体污染。",
-    "repo_url": "https://github.com/miss82824352235/MoviePilot-Plugins",
-    "update_time": "2026-06-28 16:00:00"
+      "v2.8.0": "从方便 AI 读取和维护的角度进行低风险模块拆分：新增 AI 导航文档、常量模块、数据结构模块、原盘判定模块；原盘判定委托独立 matcher，保持现有业务行为。",
+      "v2.7.0": "事件驱动秒级拦截与基于媒体管理系统的彻底清理。"
+    }
   }
 }
