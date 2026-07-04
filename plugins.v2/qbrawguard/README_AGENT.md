@@ -4,7 +4,7 @@
 
 ## 当前模块地图
 
-- `__init__.py`：MoviePilot 插件入口、生命周期、事件、调度器、当前主流程编排和 UI。后续应继续瘦身。
+- `__init__.py`：MoviePilot 插件入口、生命周期、API、调度器和轻量委托。
 - `constants.py`：默认配置、标题预检提示词、原盘结构正则、版本号。
 - `models.py`：跨模块数据结构，后续拆分时优先补充和复用。
 - `downloader.py`：通过 MoviePilot Chain 读取下载器返回的真实文件列表，兼容字段并在事件触发时短轮询等待文件列表就绪。
@@ -17,7 +17,7 @@
 ## AI 优先阅读顺序
 
 1. 先读本文件确认模块边界。
-2. 读 `__init__.py` 的 `on_download_added()`、`_scan()`、`_hit()` 理解当前主链路。
+2. 读 `orchestrator.py` 的 `scan()`、`handle_download_added()`、`hit()`、`full_cleanup()` 理解当前主链路。
 3. 判定误报/漏报时读 `constants.py` 与 `matcher.py`。
 4. 清理问题读 `cleaner.py` 和 `__init__.py` 的 `_full_cleanup()`；自动清理只按 download_hash 精确关联。
 5. 通知问题读 `notifier.py` 和 `__init__.py` 的 `_notify()`；发送动作通过 `_PluginBase.post_message()` 复用 MP 原生通知链路。
@@ -39,7 +39,6 @@ DownloadAdded 事件 / QBRawGuardFast 定时扫描
 
 为了方便 AI 定位和维护，后续建议继续拆成：
 
-- `orchestrator.py`：事件/定时扫描/命中处理的显式编排层。
 - `downloader.py`：qBittorrent 获取文件、暂停、删除任务封装。
 - `cleaner.py`：转移历史、下载历史、媒体库文件清理。
 - `rescan.py`：延迟回扫队列。
