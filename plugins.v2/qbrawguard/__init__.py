@@ -22,7 +22,7 @@ from .utils import clean_line, display_title, format_size, format_time, notice_i
 class QBRawGuard(_PluginBase):
     """
     ============================================================
-    原盘通知 v2.8.6 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
+    原盘通知 v2.8.7 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
     ============================================================
     事件驱动（DownloadAdded）：新种子秒级响应，不受标题预检限制
     快速拦截（Fast）：标题预检 → 文件结构正则匹配 → 命中处理
@@ -106,7 +106,7 @@ class QBRawGuard(_PluginBase):
             "methods": ["GET", "POST"],
             "auth": "apikey",
             "summary": "测试原盘通知发送",
-            "description": "发送一条测试通知到 Telegram，验证通知通道是否正常",
+            "description": "发送一条测试通知到所选 MoviePilot 通知场景，验证通知通道是否正常",
         }, {
             "path": "/manual_rescan",
             "endpoint": self._manual_rescan_api,
@@ -390,12 +390,10 @@ class QBRawGuard(_PluginBase):
         if len(self._survivors) > 5000:
             self._survivors = set(list(self._survivors)[-3000:])
 
-    @staticmethod
     def _file_names(self, service: Any, h: str, downloader: str) -> List[str]:
         """通过 MoviePilot Chain 读取下载器真实文件列表；原盘判定不得直接使用种子名。"""
         return get_file_names_from_chain(self.chain, h, downloader)
 
-    @staticmethod
     def _file_names_with_retry(self, service: Any, h: str, downloader: str) -> List[str]:
         """事件触发后通过 MoviePilot Chain 短轮询等待真实文件列表就绪。"""
         return get_file_names_from_chain_with_retry(self.chain, h, downloader, attempts=5, delay=1.5)
