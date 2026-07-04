@@ -9,11 +9,11 @@ from app.log import logger
 from app.plugins import _PluginBase
 from app.schemas.types import EventType, NotificationType
 
-from .cleaner import cleanup_by_hash
 from .constants import CONFIG_DEFAULTS, DEFAULT_PATTERNS, PLUGIN_VERSION, TITLE_HINTS
 from .downloader import get_file_names_from_chain, get_file_names_from_chain_with_retry
 from .matcher import compile_patterns, match_raw_disc
 from .notifier import build_download_style_notice, detect_format, notification_type, safe_format_hint
+from .orchestrator import full_cleanup, handle_download_added, hit, scan, torrent_gone
 from .status import STATUS_COLOR_PROP, STATUS_TEXT_CLASS, build_check_status
 from .ui import build_form, build_page
 from .utils import clean_line, display_title, format_size, format_time, notice_image, short_name, site_name, suspect_name, value_of
@@ -22,7 +22,7 @@ from .utils import clean_line, display_title, format_size, format_time, notice_i
 class QBRawGuard(_PluginBase):
     """
     ============================================================
-    原盘通知 v2.8.8 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
+    原盘通知 v2.8.9 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
     ============================================================
     事件驱动（DownloadAdded）：新种子秒级响应，不受标题预检限制
     快速拦截（Fast）：标题预检 → 文件结构正则匹配 → 命中处理
@@ -248,92 +248,16 @@ class QBRawGuard(_PluginBase):
     # ═══════════════════════════════════════════════════════════
 
     def _scan(self, mode: str = "fast"):
-        is_fast = mode == "fast"
-        label = "快速拦截" if is_fast else "全量兜底"
-        start = time.time()
-        total = checked = hits = 0
-        hit_names: List[str] = []
-        try:
-            services_dict = self._services()
-            if not services_dict:
-                self._add_oplog(label, 0, 0, 0, 0, err="无可用下载器")
-                logger.warning(f"{self.plugin_name} {label} 无可用 QB 下载器")
-                return
-            for downloader, service in services_dict.items():
-                torrents, err = service.instance.get_torrents()
-                if err:
-                    logger.warning(f"{self.plugin_name} 获取 {downloader} 种子列表失败：{err}")
-                    continue
-                for torrent in torrents or []:
-                    h = self._val(torrent, "hash", "hashString")
-                    name = self._val(torrent, "name", "title") or ""
-                    if not h or self._skip(torrent):
-                        continue
-                    with self._lock:
-                        if self._processed_ok(h, present=True):
-                            continue
-                    total += 1
-                    if is_fast and not self._suspect_name(name):
-                        continue
-                    if not is_fast:
-                        with self._lock:
-                            if str(h).lower() in self._survivors:
-                                continue
-                    checked += 1
-                    try:
-                        files = self._file_names(service, h, downloader)
-                        if not files:
-                            logger.debug(f"{self.plugin_name} {label} 跳过文件列表未就绪任务：{self._short_name(name)}")
-                            continue
-                        matched = self._match(files)
-                        if matched:
-                            hits += 1
-                            self._hit(downloader, service, torrent, matched)
-                            hit_names.append(name)
-                        else:
-                            with self._lock:
-                                self._mark_nonsuspect(h, name)
-                    except Exception as e:
-                        logger.error(f"{self.plugin_name} {label} 异常 [{self._short_name(name)}]: {e}")
-        except Exception as e:
-            logger.error(f"{self.plugin_name} {label} 严重异常：{e}")
-        finally:
-            elapsed = time.time() - start
-            self._add_oplog(label, total, checked, hits, elapsed,
-                            err="" if total > 0 else "无待检任务",
-                            hit_names=hit_names if hit_names else None)
+        """执行扫描，实际编排逻辑位于 orchestrator.py。"""
+        return scan(self, mode)
 
     # ═══════════════════════════════════════════════════════════
     # 事件驱动
     # ═══════════════════════════════════════════════════════════
 
     def on_download_added(self, event):
-        if not self.enabled:
-            return
-        h = event.event_data.get("hash")
-        if not h:
-            return
-        with self._lock:
-            if self._processed_ok(h, present=True):
-                return
-        downloader = event.event_data.get("downloader")
-        service = self._get_service(downloader)
-        if not service:
-            return
-        try:
-            files = self._file_names_with_retry(service, h, downloader)
-            if not files:
-                logger.debug(f"{self.plugin_name} 事件触发后文件列表仍未就绪，等待定时扫描兜底：{h[:8]}")
-                return
-            matched = self._match(files)
-            if not matched:
-                return
-            torrents, err = service.instance.get_torrents(ids=h)
-            if err or not torrents:
-                return
-            self._hit(downloader, service, torrents[0], matched)
-        except Exception as e:
-            logger.error(f"{self.plugin_name} 事件处理异常：{e}")
+        """处理下载添加事件，实际编排逻辑位于 orchestrator.py。"""
+        return handle_download_added(self, event)
 
     # ═══════════════════════════════════════════════════════════
     # 下载器
@@ -416,91 +340,20 @@ class QBRawGuard(_PluginBase):
     # ═══════════════════════════════════════════════════════════
 
     def _hit(self, downloader: str, service: Any, torrent: Any, matched: List[str]):
-        h = str(self._val(torrent, "hash", "hashString") or "").lower()
-        name = self._val(torrent, "name", "title") or h
-        with self._lock:
-            if h in self._cleaning:
-                return
-            self._cleaning.add(h)
-        if self.action == "delete":
-            self._record(h, downloader, name, matched, False)
-            self._full_cleanup(downloader, h, name, matched)
-        else:
-            ok = bool(self.chain.stop_torrents(hashs=[h], downloader=downloader))
-            if self.tag:
-                try:
-                    self.chain.set_torrents_tag(hashs=[h], tags=[self.tag], downloader=downloader)
-                except Exception:
-                    pass
-            self._record(h, downloader, name, matched, ok)
-            with self._lock:
-                self._cleaning.discard(h)
-        if self.notify:
-            self._notify(downloader, name, matched, torrent)
+        """处理命中动作，实际编排逻辑位于 orchestrator.py。"""
+        return hit(self, downloader, service, torrent, matched)
 
     # ═══════════════════════════════════════════════════════════
     # 四件套
     # ═══════════════════════════════════════════════════════════
 
     def _full_cleanup(self, downloader: str, h: str, name: str, matched: List[str]):
-        """彻底清理：复用 MP Chain 与整理记录删除语义清理关联痕迹。"""
-        try:
-            # 先暂停，降低整理链路继续处理原盘任务的概率。
-            try:
-                self.chain.stop_torrents(hashs=[h], downloader=downloader)
-            except Exception as err:
-                logger.debug(f"{self.plugin_name} 删除前暂停任务失败：{err}")
-
-            # MP 侧只按 hash 精确清理，目标媒体库文件和转移记录走 MP 整理记录删除语义；
-            # 源文件交给 remove_torrents(delete_file=True)，避免重复删除。
-            clean_result = cleanup_by_hash(h, delete_src=False, delete_dest=True, eventmanager=self.eventmanager)
-            media_deleted = clean_result.total
-            logger.info(
-                f"{self.plugin_name} MP侧清理：转移记录 {clean_result.transfer_records}，"
-                f"媒体库文件 {clean_result.dest_files}，下载历史 {clean_result.download_histories}，"
-                f"下载文件记录 {clean_result.download_files}"
-            )
-            for err in clean_result.errors[:3]:
-                logger.warning(f"{self.plugin_name} MP侧清理异常：{err}")
-
-            # 下载器任务和源文件删除统一走 MoviePilot 下载器 Chain。
-            try:
-                self.chain.remove_torrents(hashs=[h], delete_file=True, downloader=downloader)
-            except Exception as err:
-                logger.warning(f"{self.plugin_name} 删除下载器任务异常：{err}")
-
-            time.sleep(2)
-            deleted = self._torrent_gone(downloader, h)
-            if not deleted:
-                logger.warning(f"{self.plugin_name} 删除后任务仍存在，将保留失败状态等待下次重试：{self._short_name(name)}")
-
-            with self._lock:
-                if h in self.processed:
-                    self.processed[h]["ok"] = deleted and not clean_result.errors
-                    self.processed[h]["media_deleted"] = media_deleted
-                    self.processed[h]["time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    if not deleted:
-                        self.processed[h]["err"] = "删除后任务仍在下载器中"
-                    elif clean_result.errors:
-                        self.processed[h]["err"] = "; ".join(clean_result.errors[:2])
-                    else:
-                        self.processed[h].pop("err", None)
-                    self.save_data("processed", self.processed)
-                self._cleaning.discard(h)
-                self._add_oplog("彻底清理", 0, 0, 0, media_deleted, sample=self._short_name(name))
-        except Exception as e:
-            logger.error(f"{self.plugin_name} 彻底清理异常 [{self._short_name(name)}]: {e}")
-            with self._lock:
-                self._cleaning.discard(h)
+        """彻底清理，实际编排逻辑位于 orchestrator.py。"""
+        return full_cleanup(self, downloader, h, name, matched)
 
     def _torrent_gone(self, downloader: str, h: str) -> bool:
-        """确认任务是否已从下载器消失，避免误把删除失败标记为成功。"""
-        try:
-            torrents = self.chain.list_torrents(hashs=[h], downloader=downloader, include_all_tags=True)
-            return not torrents
-        except Exception as e:
-            logger.warning(f"{self.plugin_name} 删除结果确认异常：{e}")
-            return False
+        """确认下载器任务是否已消失，实际逻辑位于 orchestrator.py。"""
+        return torrent_gone(self, downloader, h)
 
 
 
