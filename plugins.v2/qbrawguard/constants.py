@@ -10,7 +10,7 @@ QBRawGuard 常量与默认配置模块。
 from typing import Dict, Tuple
 
 
-PLUGIN_VERSION = "2.8.8"
+PLUGIN_VERSION = "2.8.9"
 
 TITLE_HINTS: Tuple[str, ...] = (
     "bdmv", "certificate", "video_ts", "audio_ts", "hvdvd_ts",
