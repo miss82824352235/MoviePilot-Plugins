@@ -11,11 +11,14 @@ from app.schemas.file import FileItem
 from app.schemas.types import EventType, NotificationType
 from app.core.config import settings
 
+from .constants import CONFIG_DEFAULTS, DEFAULT_PATTERNS, PLUGIN_VERSION, TITLE_HINTS
+from .matcher import compile_patterns, match_raw_disc
+
 
 class QBRawGuard(_PluginBase):
     """
     ============================================================
-    原盘通知 v2.7.0 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
+    原盘通知 v2.8.0 — 事件驱动秒级拦截 · 基于媒体管理系统彻底清理
     ============================================================
     事件驱动（DownloadAdded）：新种子秒级响应，不受标题预检限制
     快速拦截（Fast）：标题预检 → 文件结构正则匹配 → 命中处理
@@ -25,73 +28,16 @@ class QBRawGuard(_PluginBase):
     plugin_name = "原盘通知"
     plugin_desc = "智能拦截 BDVM / ISO / DVD 原盘种子，事件驱动秒级响应；命中后基于媒体管理系统彻底清理所有关联痕迹，杜绝 Emby 无法播放的媒体污染。"
     plugin_icon = "https://raw.githubusercontent.com/miss82824352235/MoviePilot-Plugins/main/icons/QBRawGuard.png"
-    plugin_version = "2.7.0"
+    plugin_version = PLUGIN_VERSION
     plugin_author = "MoviePilot Agent"
     author_url = "https://github.com/jxxghp/MoviePilot/pull/5687"
     plugin_config_prefix = "qbrawguard_"
     plugin_order = 29
     auth_level = 1
 
-    TITLE_HINTS = (
-        "bdmv", "certificate", "video_ts", "audio_ts", "hvdvd_ts",
-        ".iso", ".img", ".nrg",
-        "complete.bluray", "complete.blu-ray", "complete_uhd",
-        "bdiso", "bd25", "bd50",
-        "uhd.bluray", "uhd.blu-ray", "uhd bluray", "uhd_bluray",
-        "blu-ray", "full.disc",
-        "-mteam", "-hds", "-hdsky", "-chdbits", "-52pt", "-pter",
-        "thor@hds", "pete@hds", "blu-ray.diy", "bluray.diy",
-        "blu-ray.avc", "bluray.avc", "bluray.remux", "blu-ray.remux",
-    )
-
-    DEFAULT_PATTERNS = r"""# Blu-ray / UHD Blu-ray / 3D Blu-ray 原盘
-(?i)(^|[/\\])(BDMV|CERTIFICATE|AACS)([/\\]|$)
-(?i)(^|[/\\])BDMV[/\\](BACKUP|PLAYLIST|CLIPINF|STREAM|AUXDATA|BDJO|JAR|META)([/\\]|$)
-(?i)(^|[/\\])BDMV[/\\](index|MovieObject)\.bdmv$
-(?i)\.(bdmv|mpls|clpi)$
-# m2ts/ssif 需 BDMV 路径上下文，避免误判 WEB-DL 的 m2ts 流（HBO Max 等流媒体底层用 MPEG-TS/m2ts 封装）
-(?i)(^|[/\\])BDMV[/\\].*\.(m2ts|ssif)$
-# DVD / HD DVD 原盘
-(?i)(^|[/\\])(VIDEO_TS|AUDIO_TS|HVDVD_TS)([/\\]|$)
-(?i)(^|[/\\])VIDEO_TS[/\\].*\.(ifo|bup|vob)$
-(?i)(^|[/\\])HVDVD_TS[/\\].*\.(evo|ifo|bup|map|xpl)$
-# VCD / SVCD 原盘
-(?i)(^|[/\\])(VCD|SVCD|MPEGAV|SEGMENT|EXT)([/\\]|$)
-(?i)(^|[/\\])(VCD|SVCD|MPEGAV)[/\\].*\.(dat|mpg|mpeg)$
-# 光盘镜像、分卷镜像、镜像描述/索引文件
-(?i)\.(iso|img|nrg|mdf|mds|ccd|cue|bin|toast|udf|dmg|isz|cdi|b5t|b6t|bwt|sub|dvdmedia)$
-(?i)\.i\d{2}$
-"""
-
-    # 配置字段默认值。init_plugin 和 update_config 都从这里读取，避免重复维护字段名。
-    CONFIG_DEFAULTS = {
-        "enabled": False,
-        "fast_scan_enabled": True,
-        "downloaders": [],
-        "interval": 2,
-        "action": "stop",
-        "tag": "原盘拦截",
-        "include_completed": True,
-        "retry_failed": True,
-        "notify": True,
-        "notify_type": "Agent",
-        "alert_image": "https://cdn-icons-png.flaticon.com/512/564/564619.png",
-        "test_title": "阿凡达：火与烬 (2025)",
-        "test_subtitle": "Avatar Fire and Ash 2025 2160p UHD Blu-ray DoVi HDR10 HEVC TrueHD 7.1-Thor@HDSky",
-        "test_site": "馒头",
-        "test_seeders": "111",
-        "test_tags": "中字 4k 中配 hdr10 DoVi",
-        "test_format": "光盘镜像文件",
-        "test_message": (
-            "站点：馒头\n质量：UHD HDR10 DoVi 2160p\n大小：92.61G\n"
-            "种子：Avatar Fire and Ash 2025 2160p UHD Blu-ray DoVi HDR10 HEVC TrueHD 7.1-Thor@HDSky\n"
-            "发布时间：2026-06-02 06:03:02\n做种数：111\n促销：50%\nHit&Run：否\n"
-            "标签：中字 4k 中配 hdr10 DoVi\n"
-            "描述：阿凡达：火与烬 / 阿凡达3 / 阿凡达3：带种者 / 阿凡达3：火与灰 / 阿凡达3：火与烬"
-            " 【UHD原盘 DIY国语DTS配音 官译简繁粤/双语字幕】"
-        ),
-        "patterns": "",  # 空时回落到 DEFAULT_PATTERNS
-    }
+    TITLE_HINTS = TITLE_HINTS
+    DEFAULT_PATTERNS = DEFAULT_PATTERNS
+    CONFIG_DEFAULTS = CONFIG_DEFAULTS
 
     # ═══════════════════════════════════════════════════════════
     # 生命周期
@@ -430,26 +376,13 @@ class QBRawGuard(_PluginBase):
     # ═══════════════════════════════════════════════════════════
 
     def _match(self, names: List[str]) -> List[str]:
-        ret = []
-        for name in names:
-            if any(r.search(name) for r in self.regex):
-                ret.append(name)
-                if len(ret) >= 3:
-                    break
-        return ret
+        """基于下载器真实文件列表匹配原盘结构。"""
+        return match_raw_disc(names, self.regex)
 
     @staticmethod
     def _compile(patterns: str) -> List[re.Pattern]:
-        regs = []
-        for line in (patterns or "").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            try:
-                regs.append(re.compile(line))
-            except re.error as e:
-                logger.warning(f"原盘通知 正则无效：{line}，{e}")
-        return regs
+        """编译原盘判定正则。"""
+        return compile_patterns(patterns)
 
     # ═══════════════════════════════════════════════════════════
     # 命中
