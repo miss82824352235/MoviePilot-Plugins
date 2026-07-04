@@ -10,7 +10,7 @@ QBRawGuard 常量与默认配置模块。
 from typing import Dict, Tuple
 
 
-PLUGIN_VERSION = "2.8.6"
+PLUGIN_VERSION = "2.8.7"
 
 TITLE_HINTS: Tuple[str, ...] = (
     "bdmv", "certificate", "video_ts", "audio_ts", "hvdvd_ts",
@@ -46,8 +46,10 @@ DEFAULT_PATTERNS = r"""# Blu-ray / UHD Blu-ray / 3D Blu-ray 原盘
 CONFIG_DEFAULTS: Dict[str, object] = {
     "enabled": False,
     "fast_scan_enabled": True,
+    "full_scan_enabled": False,
     "downloaders": [],
     "interval": 2,
+    "full_interval": 0,
     "action": "stop",
     "tag": "原盘拦截",
     "include_completed": True,
