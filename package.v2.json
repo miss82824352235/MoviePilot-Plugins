@@ -15,5 +15,19 @@
       "v2.8.8": "清理旧兼容风险入口：删除 _clean_one/_collect_media_items/_extract_core_name/_extract_year/_delete_media_items，彻底移除按种子名提取标题/年份后自动删除媒体库的旧路径；README_AGENT 增加已移除风险路径说明，自动清理只按 download_hash 精确关联。",
       "v2.8.7": "审计修复：修复文件列表读取方法误标 staticmethod 导致扫描/事件读取真实文件列表 TypeError 的核心问题；将 full_scan_enabled/full_interval 纳入 CONFIG_DEFAULTS，确保配置、状态、调度一致；优化手动清理按钮文案与风险提示；测试通知描述泛化为 MP 通知场景。"
     }
+  },
+  "SubtitleWebUploader": {
+    "id": "SubtitleWebUploader",
+    "name": "字幕网页上传器",
+    "description": "TG 网页入口 + Web 操作台，桥接字幕匹配插件完成字幕上传、在线字幕、字幕管理、时间轴处理和 AI 任务。",
+    "icon": "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/subtitle.png",
+    "version": "v0.3.0",
+    "author": "MoviePilot Agent",
+    "level": 1,
+    "v2": true,
+    "history": {
+      "v0.3.0": "重构移动端字幕操作台：新增在线字幕、字幕管理、历史字幕时间轴处理、AI任务取消，并优化上传/删除/AI交互。",
+      "v0.2.0": "新增TG网页入口与SubtitleManualUpload桥接能力。"
+    }
   }
 }
