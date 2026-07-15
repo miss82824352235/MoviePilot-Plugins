@@ -27,7 +27,7 @@ class SubtitleWebUploader(_PluginBase):
     plugin_name = "字幕网页上传器"
     plugin_desc = "TG 网页入口 + Web 操作台，桥接字幕匹配插件完成字幕上传、删除和 AI 任务。"
     plugin_icon = "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/subtitle.png"
-    plugin_version = "v0.3.0"
+    plugin_version = "v0.5.2"
     plugin_author = "MoviePilot Agent"
     author_url = "https://github.com/jxxghp/MoviePilot"
     plugin_config_prefix = "subtitleweb_"
@@ -111,13 +111,30 @@ class SubtitleWebUploader(_PluginBase):
             routes.extend(self._legacy_routes())
         return routes
 
+    @staticmethod
+    def get_render_mode() -> Tuple[str, Optional[str]]:
+        """声明插件使用 Vue 联邦组件渲染。"""
+        return "vue", "dist/assets"
+
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
-        """返回插件配置表单。"""
-        return build_form(self)
+        """返回 Vue 配置组件的默认配置。"""
+        return [], self._current_config()
 
     def get_page(self) -> List[dict]:
-        """返回插件详情页。"""
-        return build_page(self)
+        """Vue 模式下详情页由远程 Page 组件渲染。"""
+        return []
+
+    def _current_config(self) -> Dict[str, Any]:
+        """返回当前配置快照。"""
+        return {
+            "enabled": bool(self._enabled),
+            "console_title": self._console_title,
+            "session_timeout": int(self._session_timeout),
+            "tg_entry_enabled": bool(self._tg_entry_enabled),
+            "legacy_api_enabled": bool(self._legacy_api_enabled),
+            "console_base_url": self._console_base_url or "",
+            "root_path": self._root_path or "",
+        }
 
     def get_service(self) -> List[Dict[str, Any]]:
         """返回插件定时服务。"""
@@ -128,7 +145,7 @@ class SubtitleWebUploader(_PluginBase):
         logger.info("SubtitleWebUploader 停止服务")
 
     def api_console(self):
-        """返回移动端网页操作台。"""
+        """返回移动端网页操作台兼容入口。"""
         return render_console(self)
 
     @eventmanager.register(EventType.PluginAction)
