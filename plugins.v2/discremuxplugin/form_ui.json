@@ -427,10 +427,20 @@
                     },
                     "content": [
                       {
+                        "component": "VTextField",
+                        "props": {
+                          "model": "library_scan_interval_minutes",
+                          "label": "源文件补扫间隔(分钟)",
+                          "type": "number",
+                          "hint": "默认 10 分钟补扫源文件原盘；设为 0 则回退使用下方 Cron",
+                          "persistent-hint": true
+                        }
+                      },
+                      {
                         "component": "VCronField",
                         "props": {
                           "model": "library_scan_cron",
-                          "label": "已入库扫描 Cron",
+                          "label": "源文件扫描 Cron（间隔为0时生效）",
                           "placeholder": "例如: 30 3 * * *"
                         }
                       }
