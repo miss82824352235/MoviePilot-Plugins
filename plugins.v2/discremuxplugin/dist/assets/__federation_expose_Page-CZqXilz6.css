@@ -1,0 +1,33 @@
+
+.disc-console[data-v-f0444d1d] {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 8px 4px 24px;
+}
+.hero-card[data-v-f0444d1d] {
+  border-radius: 16px;
+}
+.stat-card[data-v-f0444d1d] {
+  border-radius: 14px;
+  height: 100%;
+}
+.task-card[data-v-f0444d1d] {
+  border-radius: 14px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+  cursor: pointer;
+}
+.task-card.selected[data-v-f0444d1d] {
+  border-color: rgb(var(--v-theme-primary));
+  box-shadow: 0 0 0 1px rgba(var(--v-theme-primary), .35);
+}
+.control-bar[data-v-f0444d1d] {
+  min-height: 40px;
+}
+.min-w-0[data-v-f0444d1d] {
+  min-width: 0;
+}
+@media (max-width: 599.98px) {
+.disc-console[data-v-f0444d1d] {
+    padding-bottom: 72px;
+}
+}
