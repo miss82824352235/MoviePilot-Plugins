@@ -62,31 +62,58 @@ class SubtitleManualBridge:
     """字幕匹配插件桥接器。"""
 
     plugin_id = "SubtitleManualUpload"
+    plugin_candidates = ("SubtitleManualUploadMobile", "SubtitleManualUpload")
 
     def __init__(self, owner: Any):
         """初始化桥接器。"""
         self.owner = owner
+        self.active_plugin_id = "SubtitleManualUploadMobile"
+        self.active_module_base = "app.plugins.subtitlemanualuploadmobile"
 
     def plugin(self) -> Optional[Any]:
-        """获取运行中的字幕匹配插件实例。"""
+        """获取运行中的字幕匹配插件实例，优先原版，自动回退移动版。"""
         try:
-            return PluginManager().running_plugins.get(self.plugin_id)
+            running = PluginManager().running_plugins or {}
+            for plugin_id in self.plugin_candidates:
+                plugin = running.get(plugin_id)
+                if not plugin:
+                    continue
+                if hasattr(plugin, "get_state") and not bool(plugin.get_state()):
+                    continue
+                self.active_plugin_id = plugin_id
+                module_name = str(getattr(plugin.__class__, "__module__", ""))
+                if module_name.endswith(".__init__"):
+                    module_name = module_name.rsplit(".", 1)[0]
+                self.active_module_base = module_name or (
+                    "app.plugins.subtitlemanualuploadmobile" if plugin_id == "SubtitleManualUploadMobile" else "app.plugins.subtitlemanualupload"
+                )
+                return plugin
         except Exception as exc:
             logger.warning("[SubtitleWebUploader] 获取字幕匹配插件失败：%s", exc)
-            return None
+        return None
+
+    def _import_api_class(self, module_name: str, class_name: str) -> Any:
+        """按当前桥接到的字幕插件动态导入 API 类。"""
+        import importlib
+
+        module = importlib.import_module(f"{self.active_module_base}.api.{module_name}")
+        return getattr(module, class_name)
 
     def status(self) -> Dict[str, Any]:
         """查询桥接状态。"""
         plugin = self.plugin()
         if not plugin:
-            return fail("字幕匹配插件未运行，请先启用 SubtitleManualUpload", 503, {"bridge": False})
+            return fail("字幕匹配插件未运行，请先启用 SubtitleManualUpload 或 SubtitleManualUploadMobile", 503, {"bridge": False, "plugin_candidates": list(self.plugin_candidates)})
+        bridge_mode = "移动版" if self.active_plugin_id == "SubtitleManualUploadMobile" else "原版"
         return ok(
             {
                 "bridge": True,
-                "plugin_id": self.plugin_id,
+                "plugin_id": self.active_plugin_id,
                 "plugin_name": getattr(plugin, "plugin_name", "字幕匹配"),
                 "plugin_version": getattr(plugin, "plugin_version", ""),
                 "plugin_state": bool(plugin.get_state()) if hasattr(plugin, "get_state") else True,
+                "bridge_mode": bridge_mode,
+                "bridge_target": f"{getattr(plugin, 'plugin_name', '字幕匹配')} {getattr(plugin, 'plugin_version', '')}".strip(),
                 "web_plugin_version": getattr(self.owner, "plugin_version", ""),
             }
         )
@@ -95,7 +122,7 @@ class SubtitleManualBridge:
         """确保字幕匹配插件可用。"""
         plugin = self.plugin()
         if not plugin:
-            raise HTTPException(status_code=503, detail="字幕匹配插件未运行，请先启用 SubtitleManualUpload")
+            raise HTTPException(status_code=503, detail="字幕匹配插件未运行，请先启用 SubtitleManualUpload 或 SubtitleManualUploadMobile")
         return plugin
 
     async def _call(self, func: Any, *args: Any, **kwargs: Any) -> Dict[str, Any]:
@@ -106,72 +133,62 @@ class SubtitleManualBridge:
 
     async def search(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """搜索字幕匹配本地媒体候选。"""
-        from app.plugins.subtitlemanualupload.api.catalog_api import CatalogApi
-
         plugin = self._ensure_plugin()
+        CatalogApi = self._import_api_class("catalog_api", "CatalogApi")
         return await self._call(CatalogApi(plugin).search, _QueryRequest(params))
 
     async def targets(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """读取字幕匹配本地目标文件。"""
-        from app.plugins.subtitlemanualupload.api.catalog_api import CatalogApi
-
         plugin = self._ensure_plugin()
+        CatalogApi = self._import_api_class("catalog_api", "CatalogApi")
         return await self._call(CatalogApi(plugin).targets, _QueryRequest(params))
 
     async def history(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """读取字幕匹配历史。"""
-        from app.plugins.subtitlemanualupload.api.catalog_api import CatalogApi
-
         plugin = self._ensure_plugin()
+        CatalogApi = self._import_api_class("catalog_api", "CatalogApi")
         return await self._call(CatalogApi(plugin).match_history, _QueryRequest(params))
 
     async def prepare_upload(self, target_ids: List[str], files: List[UploadFile]) -> Dict[str, Any]:
         """调用字幕匹配上传预览。"""
-        from app.plugins.subtitlemanualupload.api.upload_api import UploadApi
-
         plugin = self._ensure_plugin()
+        UploadApi = self._import_api_class("upload_api", "UploadApi")
         return await self._call(UploadApi(plugin).prepare_upload, _FormRequest(target_ids, files))
 
     async def apply_upload(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """调用字幕匹配确认写入。"""
-        from app.plugins.subtitlemanualupload.api.upload_api import UploadApi
-
         plugin = self._ensure_plugin()
+        UploadApi = self._import_api_class("upload_api", "UploadApi")
         return await self._call(UploadApi(plugin).apply_upload, _JsonRequest(body))
 
     async def clear_subtitles(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """调用字幕匹配清空外挂字幕。"""
-        from app.plugins.subtitlemanualupload.api.upload_api import UploadApi
-
         plugin = self._ensure_plugin()
+        UploadApi = self._import_api_class("upload_api", "UploadApi")
         return await self._call(UploadApi(plugin).clear_subtitles, _JsonRequest(body))
 
     async def delete_subtitle(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """调用字幕匹配删除单个外挂字幕。"""
-        from app.plugins.subtitlemanualupload.api.upload_api import UploadApi
-
         plugin = self._ensure_plugin()
+        UploadApi = self._import_api_class("upload_api", "UploadApi")
         return await self._call(UploadApi(plugin).delete_subtitle, _JsonRequest(body))
 
     async def ai_submit(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """调用字幕匹配提交 AI 字幕任务。"""
-        from app.plugins.subtitlemanualupload.api.ai_api import AiApi
-
         plugin = self._ensure_plugin()
+        AiApi = self._import_api_class("ai_api", "AiApi")
         return await self._call(AiApi(plugin).ai_submit, _JsonRequest(body))
 
     async def ai_tasks(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """调用字幕匹配查询 AI 字幕任务。"""
-        from app.plugins.subtitlemanualupload.api.ai_api import AiApi
-
         plugin = self._ensure_plugin()
+        AiApi = self._import_api_class("ai_api", "AiApi")
         return await self._call(AiApi(plugin).ai_tasks, _JsonRequest(body))
 
     async def ai_cancel(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """调用字幕匹配取消 AI 字幕任务。"""
-        from app.plugins.subtitlemanualupload.api.ai_api import AiApi
-
         plugin = self._ensure_plugin()
+        AiApi = self._import_api_class("ai_api", "AiApi")
         return await self._call(AiApi(plugin).ai_cancel, _JsonRequest(body))
 
     async def task_status(self, body: Dict[str, Any]) -> Dict[str, Any]:
@@ -184,21 +201,18 @@ class SubtitleManualBridge:
 
     async def timeline_fix(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """调用字幕匹配历史外挂字幕调轴。"""
-        from app.plugins.subtitlemanualupload.api.timeline_api import TimelineApi
-
         plugin = self._ensure_plugin()
+        TimelineApi = self._import_api_class("timeline_api", "TimelineApi")
         return await self._call(TimelineApi(plugin).timeline_fix_existing, _JsonRequest(body))
 
     async def online_search(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """调用字幕匹配在线字幕搜索。"""
-        from app.plugins.subtitlemanualupload.api.online_api import OnlineApi
-
         plugin = self._ensure_plugin()
+        OnlineApi = self._import_api_class("online_api", "OnlineApi")
         return await self._call(OnlineApi(plugin).online_search, _JsonRequest(body))
 
     async def online_download_preview(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """调用字幕匹配在线字幕下载预览。"""
-        from app.plugins.subtitlemanualupload.api.online_api import OnlineApi
-
         plugin = self._ensure_plugin()
+        OnlineApi = self._import_api_class("online_api", "OnlineApi")
         return await self._call(OnlineApi(plugin).online_download_preview, _JsonRequest(body))
