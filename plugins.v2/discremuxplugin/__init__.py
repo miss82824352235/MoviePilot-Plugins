@@ -12,6 +12,8 @@ import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from fastapi import Body
+
 from app import schemas
 from app.core.config import settings
 from app.chain.transfer import TransferChain
@@ -24,6 +26,7 @@ from app.plugins import _PluginBase
 from app.schemas.types import ChainEventType, EventType, MediaType
 
 from .disc_remuxer import DiscRemuxer
+from .task_manager import TaskManager
 from .track_normalizer import TrackNormalizer
 
 
@@ -31,9 +34,9 @@ class DiscRemuxPlugin(_PluginBase):
     """蓝光原盘重封装插件。"""
 
     plugin_name = "蓝光原盘重封装"
-    plugin_desc = "只从源文件目录查找 ISO/BDMV 原盘，重封装为 MKV 后通过 MoviePilot 硬链接整理入库，并规范音轨/字幕轨道标题。"
+    plugin_desc = "处理源文件目录中的 ISO/BDMV 原盘，重封装为 MKV 后交给 MoviePilot 硬链接整理入库，并提供任务控制台。"
     plugin_icon = "https://raw.githubusercontent.com/the-bruz/MoviePilot-Plugins/main/icons/discremuxplugin.png"
-    plugin_version = "2.4.1"
+    plugin_version = "2.7.2"
     plugin_author = "bruz"
     author_url = "https://github.com/the-bruz"
 
@@ -53,6 +56,7 @@ class DiscRemuxPlugin(_PluginBase):
     _remuxers = set()
     _intercept_lock = threading.Lock()
     _active_intercepts = set()
+    _task_manager: Optional[TaskManager] = None
 
     def init_plugin(self, config: dict = None):
         """根据当前配置初始化插件。"""
@@ -87,8 +91,18 @@ class DiscRemuxPlugin(_PluginBase):
         if "library_scan_cron" not in config:
             config["library_scan_cron"] = "30 3 * * *"
             changed = True
+        if "library_scan_interval_minutes" not in config:
+            # 源文件补漏扫描默认每 10 分钟；0 表示回退到 cron
+            config["library_scan_interval_minutes"] = 10
+            changed = True
         if "library_scan_max_items" not in config:
             config["library_scan_max_items"] = 50
+            changed = True
+        if "min_free_space_gb" not in config:
+            config["min_free_space_gb"] = 120
+            changed = True
+        if "max_workers" not in config:
+            config["max_workers"] = 2
             changed = True
         if "source_disc_action" not in config:
             config["source_disc_action"] = "delete" if bool(config.get("delete_download_source")) else "keep"
@@ -107,6 +121,12 @@ class DiscRemuxPlugin(_PluginBase):
         self._active_intercepts = set()
         self._remuxers = set()
         self._remuxer = None
+        if self._task_manager is None:
+            self._task_manager = TaskManager(self)
+        else:
+            # 重载后重建 worker，保留已加载快照
+            self._task_manager.plugin = self
+            self._task_manager.ensure_worker()
 
         if self._library_scan_enabled and config.get("library_scan_run_once"):
             self._scheduler = BackgroundScheduler(timezone=settings.TZ)
@@ -154,22 +174,43 @@ class DiscRemuxPlugin(_PluginBase):
                 }
             )
         if self._library_scan_enabled:
-            cron_str = config.get("library_scan_cron") or "30 3 * * *"
-            services.append(
-                {
-                    "id": f"{self.__class__.__name__}.library_scan_remux",
-                    "name": "定时扫描已入库蓝光原盘并从源文件重封装",
-                    "trigger": CronTrigger.from_crontab(cron_str),
-                    "func": self.library_scan_remux,
-                    "kwargs": {},
-                }
-            )
+            try:
+                interval_minutes = int(config.get("library_scan_interval_minutes") or 0)
+            except Exception:
+                interval_minutes = 0
+            if interval_minutes > 0:
+                from apscheduler.triggers.interval import IntervalTrigger
+                services.append(
+                    {
+                        "id": f"{self.__class__.__name__}.library_scan_remux",
+                        "name": "定时扫描源文件原盘补漏重封装",
+                        "trigger": IntervalTrigger(minutes=max(1, interval_minutes)),
+                        "func": self.library_scan_remux,
+                        "kwargs": {},
+                    }
+                )
+            else:
+                cron_str = config.get("library_scan_cron") or "30 3 * * *"
+                services.append(
+                    {
+                        "id": f"{self.__class__.__name__}.library_scan_remux",
+                        "name": "定时扫描源文件原盘补漏重封装",
+                        "trigger": CronTrigger.from_crontab(cron_str),
+                        "func": self.library_scan_remux,
+                        "kwargs": {},
+                    }
+                )
         return services
 
     def stop_service(self):
         """停止正在执行的重封装任务。"""
         self._stop_event.set()
         logger.info("收到停用信号，正在终止 MakeMKV 重封装任务...")
+        if self._task_manager is not None:
+            try:
+                self._task_manager.stop()
+            except Exception as e:
+                logger.warning(f"停止任务管理器失败: {e}")
         if self._scheduler:
             try:
                 self._scheduler.shutdown(wait=False)
@@ -195,28 +236,25 @@ class DiscRemuxPlugin(_PluginBase):
             self._remuxer = next(iter(self._remuxers), None)
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
-        json_path = Path(__file__).parent / "form_ui.json"
-        try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                form_ui = json.load(f)
-        except Exception as e:
-            logger.error(f"加载表单配置失败: {json_path} | 错误详情: {e}")
-            raise RuntimeError(f"插件 UI 配置加载失败: {e}") from e
-
+        """Vue 模式下返回默认配置模型。"""
         default_config = {
             "history_enabled": False,
             "run_once": False,
             "library_scan_enabled": False,
             "library_scan_run_once": False,
             "library_scan_cron": "30 3 * * *",
+            "library_scan_interval_minutes": 10,
             "source_root": "/PT/mp/源文件",
             "source_roots": "/PT/mp/源文件\n/PT/ms/源文件",
             "library_root": "/PT/mp/硬链接",
+            "library_roots": "/PT/mp/硬链接\n/PT/ms/硬链接",
             "library_scan_max_items": 50,
+            "max_workers": 2,
             "recent_days": 7,
             "min_mkv_size_gb": 5,
+            "min_free_space_gb": 120,
             "movies_only": True,
-            "source_disc_action": "keep",
+            "source_disc_action": "delete",
             "library_disc_action": "delete",
             "refresh_media_server": True,
             "cron_schedule": "0 3 * * *",
@@ -225,145 +263,43 @@ class DiscRemuxPlugin(_PluginBase):
             "normalize_tracks": True,
             "reset_video_language": True,
         }
-        return form_ui, default_config
+        return [], default_config
 
     def get_page(self) -> List[dict]:
-        """返回详情页 JSON。"""
-        histories = self._get_processed_histories()[:20]
-        headers = [
-            {"title": "模式", "key": "mode", "sortable": True},
-            {"title": "状态", "key": "status", "sortable": True},
-            {"title": "标题", "key": "title", "sortable": True},
-            {"title": "来源", "key": "source", "sortable": False},
-            {"title": "输出", "key": "output", "sortable": False},
-            {"title": "下载源", "key": "source_cleanup", "sortable": False},
-            {"title": "后处理", "key": "post_action", "sortable": False},
-            {"title": "时间", "key": "time", "sortable": True},
-        ]
-        items = [
-            {
-                "mode": self._format_history_mode(item),
-                "status": self._format_history_status(item),
-                "title": item.get("title") or "-",
-                "source": self._format_history_source(item),
-                "output": (item.get("remux") or {}).get("output") or item.get("output") or "-",
-                "source_cleanup": self._format_source_cleanup(item),
-                "post_action": self._format_history_post_action(item),
-                "time": item.get("finished_at") or item.get("time") or "-",
-            }
-            for item in histories
-        ]
-        page = [
-            {
-                "component": "VRow",
-                "props": {"style": {"overflow": "hidden"}},
-                "content": [
-                    {
-                        "component": "VCol",
-                        "props": {"cols": 12},
-                        "content": [
-                            {
-                                "component": "VAlert",
-                                "props": {"type": "info", "variant": "tonal", "text": self._message},
-                            }
-                        ],
-                    },
-                    {
-                        "component": "VCol",
-                        "props": {"cols": 12},
-                        "content": [
-                            {
-                                "component": "VAlert",
-                                "props": {
-                                    "type": "secondary",
-                                    "variant": "tonal",
-                                    "text": (
-                                        f"插件数据目录：{self.get_data_path()}；如需重跑，可清空已处理历史。"
-                                        "目标 MKV 已存在或旧 BDMV 有 .ignore 时仍会按配置跳过。插件不会修改 MP 整理记录状态。"
-                                    ),
-                                },
-                            }
-                        ],
-                    },
-                ],
-            }
-        ]
-        if histories:
-            page[0]["content"].append(
-                {
-                    "component": "VCol",
-                    "props": {"cols": 12},
-                    "content": [
-                        {
-                            "component": "VDataTableVirtual",
-                            "props": {
-                                "class": "text-sm",
-                                "headers": headers,
-                                "items": items,
-                                "height": "30rem",
-                                "density": "compact",
-                                "fixed-header": True,
-                                "hide-no-data": True,
-                                "hover": True,
-                            },
-                        }
-                    ],
-                },
-            )
-        else:
-            page[0]["content"].append(
-                {
-                    "component": "VCol",
-                    "props": {"cols": 12},
-                    "content": [
-                        {
-                            "component": "div",
-                            "text": "暂无已处理历史记录。",
-                            "props": {"class": "text-center"},
-                        }
-                    ],
-                }
-            )
-        page[0]["content"].append(
-            {
-                "component": "VCol",
-                "props": {"cols": 12},
-                "content": [
-                    {
-                        "component": "VBtn",
-                        "props": {
-                            "color": "warning",
-                            "variant": "tonal",
-                        },
-                        "content": [
-                            {
-                                "component": "span",
-                                "text": "清空已处理历史",
-                            }
-                        ],
-                        "events": {
-                            "click": {
-                                "api": "plugin/DiscRemuxPlugin/clear_processed",
-                                "method": "post",
-                            }
-                        },
-                    }
-                ],
-            }
-        )
-        return page
+        """Vue 模式下详情页由远程组件渲染。"""
+        return []
+
+
+    @staticmethod
+    def get_render_mode() -> Tuple[str, str]:
+        """声明插件使用 Vue 联邦组件渲染任务控制台。"""
+        return "vue", "dist/assets"
+
+    def get_sidebar_nav(self) -> List[Dict[str, Any]]:
+        """侧栏入口：原盘重封装任务控制台。"""
+        if not self.get_state():
+            return []
+        return [{
+            "nav_key": "console",
+            "title": "原盘重封装",
+            "icon": "mdi-disc",
+            "section": "organize",
+            "permission": "manage",
+            "order": 55,
+        }]
 
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
         return []
 
     def get_api(self) -> List[Dict[str, Any]]:
+        bear = "bear"
         return [
             {
                 "path": "/clear_processed",
                 "endpoint": self.clear_processed_histories,
                 "methods": ["POST"],
-                "auth": "bear",
+                "auth": bear,
                 "summary": "清空已处理历史",
                 "description": "清空插件记录的 processed history id，用于允许重新处理整理历史。",
             },
@@ -371,11 +307,222 @@ class DiscRemuxPlugin(_PluginBase):
                 "path": "/library_scan_preview",
                 "endpoint": self.library_scan_preview,
                 "methods": ["POST"],
-                "auth": "bear",
+                "auth": bear,
                 "summary": "预览已入库原盘扫描任务",
                 "description": "只扫描源文件和硬链接库中的 BDMV 候选，不执行重封装、整理、删除或媒体库刷新。",
             },
+            {
+                "path": "/status",
+                "endpoint": self.api_status,
+                "methods": ["GET"],
+                "auth": bear,
+                "summary": "任务控制台状态",
+            },
+            {
+                "path": "/tasks",
+                "endpoint": self.api_tasks,
+                "methods": ["GET"],
+                "auth": bear,
+                "summary": "任务列表",
+            },
+            {
+                "path": "/task_control",
+                "endpoint": self.api_task_control,
+                "methods": ["POST"],
+                "auth": bear,
+                "summary": "任务控制（暂停/继续/跳过/终止）",
+            },
+            {
+                "path": "/enqueue_scan",
+                "endpoint": self.api_enqueue_scan,
+                "methods": ["POST"],
+                "auth": bear,
+                "summary": "扫描源文件并入队重封装任务",
+            },
+            {
+                "path": "/enqueue_paths",
+                "endpoint": self.api_enqueue_paths,
+                "methods": ["POST"],
+                "auth": bear,
+                "summary": "手动按源路径入队",
+            },
         ]
+
+    def _ensure_task_manager(self) -> TaskManager:
+        if self._task_manager is None:
+            self._task_manager = TaskManager(self)
+        return self._task_manager
+
+    def api_status(self) -> schemas.Response:
+        tm = self._ensure_task_manager()
+        data = tm.status()
+        config = self.get_config() or {}
+        data["plugin"] = {
+            "version": self.plugin_version,
+            "history_enabled": self._history_enabled,
+            "library_scan_enabled": self._library_scan_enabled,
+            "intercept_enabled": self._intercept_enabled,
+            "source_roots": self._parse_path_list(config.get("source_roots") or config.get("source_root")),
+            "min_free_space_gb": config.get("min_free_space_gb", 120),
+            "max_workers": config.get("max_workers", 2),
+            "message": self._message,
+        }
+        return schemas.Response(success=True, message="ok", data=data)
+
+    def api_tasks(self) -> schemas.Response:
+        tm = self._ensure_task_manager()
+        return schemas.Response(success=True, message="ok", data={"tasks": tm.list_tasks(limit=100)})
+
+    def api_task_control(self, payload: Dict[str, Any] = Body(default_factory=dict)) -> schemas.Response:
+        payload = payload if isinstance(payload, dict) else {}
+        action = str(payload.get("action") or "").strip().lower()
+        task_ids = payload.get("task_ids") or []
+        if isinstance(task_ids, str):
+            task_ids = [x.strip() for x in task_ids.split(",") if x.strip()]
+        select_all = bool(payload.get("select_all"))
+        confirm = bool(payload.get("confirm"))
+        if not action:
+            return schemas.Response(success=False, message="缺少 action")
+        tm = self._ensure_task_manager()
+        result = tm.control(action=action, task_ids=task_ids, select_all=select_all, confirm=confirm)
+        return schemas.Response(
+            success=bool(result.get("success")),
+            message=result.get("message") or "",
+            data=result.get("data"),
+        )
+
+    def api_enqueue_scan(self, payload: Dict[str, Any] = Body(default_factory=dict)) -> schemas.Response:
+        payload = payload if isinstance(payload, dict) else {}
+        confirm = bool(payload.get("confirm"))
+        if not confirm:
+            return schemas.Response(
+                success=False,
+                message="扫描入队会创建真实重封装任务，请 confirm=true 后执行",
+                data={"need_confirm": True},
+            )
+        max_items = payload.get("max_items")
+        count = self.enqueue_library_scan_tasks(max_items=max_items)
+        return schemas.Response(success=True, message=f"已入队 {count} 个任务", data={"enqueued": count})
+
+    def api_enqueue_paths(self, payload: Dict[str, Any] = Body(default_factory=dict)) -> schemas.Response:
+        payload = payload if isinstance(payload, dict) else {}
+        confirm = bool(payload.get("confirm"))
+        if not confirm:
+            return schemas.Response(
+                success=False,
+                message="手动入队会创建真实重封装任务，请 confirm=true 后执行",
+                data={"need_confirm": True},
+            )
+        paths = payload.get("paths") or []
+        if isinstance(paths, str):
+            paths = [x.strip() for x in paths.splitlines() if x.strip()]
+        if not paths:
+            return schemas.Response(success=False, message="未提供 paths")
+        enqueued = []
+        for p in paths:
+            task = self.enqueue_source_path(p, mode="manual")
+            if task:
+                enqueued.append(task.id if hasattr(task, "id") else task.get("id"))
+        return schemas.Response(success=True, message=f"已入队 {len(enqueued)} 个任务", data={"task_ids": enqueued})
+
+    def enqueue_source_path(
+        self,
+        source_path: str,
+        *,
+        mode: str = "manual",
+        library_path: Optional[str] = None,
+        download_hash: Optional[str] = None,
+        downloader: Optional[str] = None,
+        tmdbid: Optional[int] = None,
+        media_type: Optional[str] = None,
+        transfer_history_id: Optional[int] = None,
+        dedupe_key: Optional[str] = None,
+        extra: Optional[dict] = None,
+    ):
+        source = Path(source_path)
+        if not self._is_valid_disc_source(source):
+            logger.warning(f"入队失败，源不是有效原盘: {source}")
+            return None
+        config = self.get_config() or {}
+        roots = self._parse_path_list(config.get("source_roots") or config.get("source_root"))
+        if roots and not self._under_any_source_root(source, roots):
+            logger.warning(f"入队失败，源不在 source_roots 内: {source}")
+            return None
+        media_kind = self._source_media_kind(source, roots)
+        output = self._output_for_disc_source(source)
+        if media_kind == "tv":
+            output = self._tv_episode_output_for_disc(source, self._tv_episode_start_for_disc(source))
+        size = 0
+        try:
+            if source.is_file():
+                size = source.stat().st_size
+        except Exception:
+            size = 0
+        tm = self._ensure_task_manager()
+        task_extra = dict(extra or {})
+        task_extra["source_media_kind"] = media_kind
+        if transfer_history_id:
+            task_extra["transfer_history_id"] = transfer_history_id
+        # 若调用方指定了 output_path，优先使用
+        if task_extra.get("output_path"):
+            output = Path(task_extra["output_path"])
+        task = tm.enqueue(
+            title=source.name,
+            source_path=source.as_posix(),
+            output_path=output.as_posix(),
+            disc_type=self._disc_type(source),
+            mode=mode,
+            source_size=size,
+            download_hash=download_hash,
+            downloader=downloader,
+            tmdbid=tmdbid,
+            media_type=media_type,
+            library_path=library_path,
+            dedupe_key=dedupe_key or f"{mode}:{source.as_posix()}",
+            extra=task_extra,
+            start_worker=True,
+        )
+        return task
+
+    def enqueue_library_scan_tasks(self, max_items: Optional[int] = None) -> int:
+        config = self.get_config() or {}
+        source_root = Path(str(config.get("source_root") or "/PT/mp/源文件")).resolve()
+        library_root = Path(str(config.get("library_root") or "/PT/mp/硬链接")).resolve()
+        limit = int(max_items or config.get("library_scan_max_items") or 50)
+        source_dirs, library_dirs, tasks, _ = self._build_library_scan_tasks(
+            source_root=source_root,
+            library_root=library_root,
+            max_items=limit,
+        )
+        logger.info(
+            "扫描入队候选: "
+            f"source_candidates={len(source_dirs)}, library_candidates={len(library_dirs)}, tasks={len(tasks)}"
+        )
+        count = 0
+        for source_movie_dir, library_movie_dir in tasks.values():
+            history = self._find_related_transfer_history(library_movie_dir, source_movie_dir)
+            media_kind = self._source_media_kind(source_movie_dir, self._parse_path_list(config.get("source_roots") or config.get("source_root")))
+            if media_kind == "unknown" and bool(config.get("movies_only", True)) and history and history.type != MediaType.MOVIE.value:
+                continue
+            output_file = self._output_for_disc_source(source_movie_dir)
+            if media_kind == "tv":
+                output_file = self._tv_episode_output_for_disc(source_movie_dir, self._tv_episode_start_for_disc(source_movie_dir))
+            min_size_gb = float(config.get("min_mkv_size_gb") or 5)
+            if self._target_mkv_exists(output_file, min_size_gb):
+                continue
+            task = self.enqueue_source_path(
+                source_movie_dir.as_posix(),
+                mode="library_scan",
+                library_path=library_movie_dir.as_posix() if library_movie_dir else None,
+                transfer_history_id=history.id if history else None,
+                tmdbid=history.tmdbid if history else None,
+                media_type=history.type if history else None,
+                dedupe_key=f"library_scan:{source_movie_dir.as_posix()}",
+            )
+            if task:
+                count += 1
+        self._message = f"已扫描入队 {count} 个重封装任务。"
+        return count
 
     def clear_processed_histories(self) -> schemas.Response:
         self.save_data(self._DATA_KEY, [])
@@ -603,6 +750,70 @@ class DiscRemuxPlugin(_PluginBase):
         if source_path.is_file():
             return source_path.with_suffix(".mkv")
         return source_path / f"{source_path.name}.mkv"
+
+    @classmethod
+    def _source_media_kind(cls, source_path: Path, source_roots: Optional[List[Path]] = None) -> str:
+        """根据源文件一级类型目录判定电影或电视剧硬分流。"""
+        path = source_path.resolve()
+        for root in source_roots or []:
+            try:
+                rel = path.relative_to(root.resolve())
+            except Exception:
+                continue
+            if rel.parts and rel.parts[0] == "电影":
+                return "movie"
+            if rel.parts and rel.parts[0] == "电视剧":
+                return "tv"
+        parts = path.parts
+        if "电影" in parts:
+            return "movie"
+        if "电视剧" in parts:
+            return "tv"
+        return "unknown"
+
+    @staticmethod
+    def _disc_number_from_name(source_path: Path) -> Optional[int]:
+        """从文件名中提取 DISC 序号。"""
+        import re
+        match = re.search(r"(?i)disc[ ._-]?(\d+)", source_path.name)
+        if not match:
+            return None
+        try:
+            return int(match.group(1))
+        except Exception:
+            return None
+
+    @staticmethod
+    def _season_number_from_name(source_path: Path) -> int:
+        """从路径名中提取季号，默认第一季。"""
+        import re
+        match = re.search(r"(?i)S(\d{1,2})", source_path.as_posix())
+        if not match:
+            return 1
+        try:
+            return int(match.group(1))
+        except Exception:
+            return 1
+
+    @classmethod
+    def _tv_episode_start_for_disc(cls, source_path: Path, episode_count: int = 0) -> int:
+        """根据 DISC 序号估算电视剧单集起始集号。"""
+        disc = cls._disc_number_from_name(source_path)
+        if not disc or disc <= 1:
+            return 1
+        return (disc - 1) * 3 + 1
+
+    @classmethod
+    def _tv_episode_output_for_disc(cls, source_path: Path, episode_number: int) -> Path:
+        """生成电视剧单集 MKV 输出名，沿用 ISO 基础名并追加 SxxExx。"""
+        import re
+        season = cls._season_number_from_name(source_path)
+        base = source_path.stem if source_path.is_file() else source_path.name
+        base = re.sub(r"(?i)[ ._-]*disc[ ._-]?\d+.*$", "", base).strip(" ._-") or source_path.stem
+        season_tag = f"S{season:02d}"
+        if re.search(rf"(?i)(^|[ ._-]){season_tag}$", base):
+            return source_path.parent / f"{base}E{episode_number:02d}.mkv"
+        return source_path.parent / f"{base}.{season_tag}E{episode_number:02d}.mkv"
 
     @staticmethod
     def _resolve_movie_dir(dest: str) -> Path:
@@ -860,10 +1071,16 @@ class DiscRemuxPlugin(_PluginBase):
             pass
         return None
 
-    def _transfer_source_mkv(self, output_file: Path, history=None) -> Tuple[bool, Any]:
+    def _transfer_source_mkv(self, output_file: Path, history=None, source_root: Optional[Path] = None) -> Tuple[bool, Any]:
         """调用 MoviePilot 正常整理链路转移源文件目录中的 MKV。"""
         if not output_file.exists() or not output_file.is_file():
             return False, f"重封装 MKV 不存在: {output_file}"
+        download_hash = getattr(history, "download_hash", None) if history else None
+        self._clear_stale_disc_transfer_histories(
+            download_hash=download_hash,
+            source_root=source_root or output_file.parent,
+            output_file=output_file,
+        )
         fileitem = schemas.FileItem(
             storage="local",
             path=output_file.as_posix(),
@@ -881,9 +1098,10 @@ class DiscRemuxPlugin(_PluginBase):
             episode_group=getattr(history, "episode_group", None) if history else None,
             background=False,
             downloader=getattr(history, "downloader", None) if history else None,
-            download_hash=getattr(history, "download_hash", None) if history else None,
+            download_hash=download_hash,
             transfer_type="link",
             sync_extra_files=False,
+            force=True,
         )
 
     def _save_library_scan_record(
@@ -1038,7 +1256,8 @@ class DiscRemuxPlugin(_PluginBase):
         blocked_reasons = []
         if processed:
             blocked_reasons.append("插件已处理记录存在")
-        if movies_only and history and history.type != MediaType.MOVIE.value:
+        media_kind = self._source_media_kind(source_movie_dir, self._parse_path_list((self.get_config() or {}).get("source_roots") or (self.get_config() or {}).get("source_root")))
+        if media_kind == "unknown" and movies_only and history and history.type != MediaType.MOVIE.value:
             blocked_reasons.append(f"关联整理历史不是电影: {history.type}")
         if self._target_mkv_exists(output_file, min_size_gb):
             blocked_reasons.append(f"源文件 MKV 已存在且大于 {min_size_gb}GB")
@@ -1094,121 +1313,11 @@ class DiscRemuxPlugin(_PluginBase):
         return schemas.Response(success=True, message="已完成只读扫描预览，未执行重封装或删除。", data=data)
 
     def library_scan_remux(self) -> bool:
-        """扫描源文件和硬链接库中的 BDMV，并从源文件目录重封装后走 MP 正常整理。"""
-        self._stop_event.clear()
-        config = self.get_config() or {}
-        source_root = Path(str(config.get("source_root") or "/PT/mp/源文件")).resolve()
-        library_root = Path(str(config.get("library_root") or "/PT/mp/硬链接")).resolve()
-        max_items = int(config.get("library_scan_max_items") or 50)
-        min_size_gb = float(config.get("min_mkv_size_gb") or 5)
-        movies_only = bool(config.get("movies_only", True))
-        library_disc_action = self._library_disc_action(config)
-        source_disc_action = self._source_disc_action(config)
-        normalize_tracks = bool(config.get("normalize_tracks", True))
-        reset_video_language = bool(config.get("reset_video_language", True))
-        refresh_media_server = bool(config.get("refresh_media_server", True))
-
-        source_dirs, library_dirs, tasks, _ = self._build_library_scan_tasks(
-            source_root=source_root,
-            library_root=library_root,
-            max_items=max_items,
-        )
-
-        logger.info(
-            "已入库原盘扫描完成: "
-            f"source_candidates={len(source_dirs)}, library_candidates={len(library_dirs)}, tasks={len(tasks)}"
-        )
-        remuxer = DiscRemuxer()
-        self._register_remuxer(remuxer)
-        try:
-            remuxer.validate_environment()
-        except Exception:
-            self._unregister_remuxer(remuxer)
-            raise
-
-        processed_count = 0
-        for source_movie_dir, library_movie_dir in tasks.values():
-            if self._stop_event.is_set():
-                logger.info("任务已被中止。")
-                break
-            dedupe_key = f"library_scan:{source_movie_dir.as_posix()}"
-            if any(item.get("dedupe_key") == dedupe_key for item in self._get_processed_histories()):
-                logger.info(f"跳过已处理源文件原盘: source={source_movie_dir}")
-                continue
-            history = self._find_related_transfer_history(library_movie_dir, source_movie_dir)
-            if movies_only and history and history.type != MediaType.MOVIE.value:
-                logger.info(f"跳过非电影已入库原盘: source={source_movie_dir}, type={history.type}")
-                continue
-            output_file = self._output_for_disc_source(source_movie_dir)
-            if self._target_mkv_exists(output_file, min_size_gb):
-                logger.info(f"源文件 MKV 已存在且大于阈值，跳过重封装: output={output_file}")
-                continue
-            if not self._is_valid_disc_source(source_movie_dir):
-                logger.warning(f"源文件原盘不存在或不支持，跳过: source={source_movie_dir}")
-                continue
-            try:
-                logger.info(
-                    "开始从源文件目录重封装已入库原盘: "
-                    f"source={source_movie_dir}, library={library_movie_dir}, output={output_file}"
-                )
-                remuxer.remux_to_mkv(
-                    source_root_path=source_movie_dir.as_posix(),
-                    output_file_path=output_file.as_posix(),
-                )
-                if normalize_tracks:
-                    self._normalize_mkv_tracks(output_file, reset_video_language=reset_video_language)
-                state, errmsg = self._transfer_source_mkv(output_file, history=history)
-                if not state:
-                    raise RuntimeError(f"源文件 MKV 整理失败: {errmsg}")
-                new_history = TransferHistoryOper().get_by_src(output_file.as_posix(), storage="local")
-                library_action = self._apply_library_disc_action(library_movie_dir, library_disc_action)
-                source_cleanup = self._cleanup_source_disc_after_success(
-                    source_root=source_movie_dir,
-                    source_disc_action=source_disc_action,
-                    download_history=history,
-                )
-                self._save_library_scan_record(
-                    source_movie_dir=source_movie_dir,
-                    library_movie_dir=library_movie_dir,
-                    output_file=output_file,
-                    history=history,
-                    status="success",
-                    library_bdmv_action=library_action,
-                    new_transfer_history_id=new_history.id if new_history else None,
-                )
-                if source_cleanup != "none":
-                    self._update_history_record(
-                        f"library_scan:{source_movie_dir.as_posix()}",
-                        post_action={"source_cleanup": source_cleanup},
-                    )
-                if refresh_media_server and new_history:
-                    self._refresh_media_server(new_history, output_file)
-                processed_count += 1
-            except subprocess.CalledProcessError as e:
-                error = e.stderr or str(e)
-                self._save_library_scan_record(
-                    source_movie_dir=source_movie_dir,
-                    library_movie_dir=library_movie_dir,
-                    output_file=output_file,
-                    history=history,
-                    status="failed",
-                    error=error,
-                )
-                logger.error(f"已入库原盘重封装失败: source={source_movie_dir}, error={error}")
-            except Exception as e:
-                self._save_library_scan_record(
-                    source_movie_dir=source_movie_dir,
-                    library_movie_dir=library_movie_dir,
-                    output_file=output_file,
-                    history=history,
-                    status="failed",
-                    error=str(e),
-                )
-                logger.error(f"已入库原盘处理失败: source={source_movie_dir}, error={e}", exc_info=True)
-
-        self._unregister_remuxer(remuxer)
-        self._message = f"已入库原盘扫描完成：任务 {len(tasks)} 个，成功处理 {processed_count} 个。"
-        logger.info(self._message)
+        """定时扫描源文件原盘并入队可视化任务队列（串行执行）。"""
+        if self._stop_event.is_set():
+            return False
+        count = self.enqueue_library_scan_tasks()
+        logger.info(f"library_scan_remux 入队完成: {count}")
         return True
 
 
@@ -1221,6 +1330,120 @@ class DiscRemuxPlugin(_PluginBase):
         logger.warning(self._message)
         return True
 
+
+    @classmethod
+    def _candidate_download_lookup_paths(cls, source_root: Path) -> List[str]:
+        """构造下载历史/文件记录回溯候选路径。"""
+        paths: List[str] = []
+        try:
+            resolved = source_root.resolve()
+        except Exception:
+            resolved = source_root
+        for item in (source_root, resolved):
+            text = item.as_posix()
+            if text and text not in paths:
+                paths.append(text)
+        # ISO/IMG 可能记在父目录；BDMV 目录记在影片根目录
+        parents = []
+        if source_root.suffix.lower() in {".iso", ".img"} or source_root.is_file():
+            parents.append(source_root.parent)
+        if source_root.name.upper() == "BDMV":
+            parents.append(source_root.parent)
+        parents.append(source_root.parent)
+        for parent in parents:
+            if not parent or parent.as_posix() in {"/", "."}:
+                continue
+            text = parent.as_posix()
+            if text not in paths:
+                paths.append(text)
+        return paths
+
+    @classmethod
+    def _resolve_intercept_download_history(cls, source_root: Path):
+        """按文件记录、完整路径、父级内容路径和 hash 回溯 MoviePilot 下载归属。
+
+        兼容 DownloadHistory.path 只记保存目录、而 fileitem 指向单文件 ISO/BDMV 的场景，
+        避免“非 MoviePilot 下载历史”误跳过拦截。
+        """
+        downloadhis = DownloadHistoryOper()
+        lookup_paths = cls._candidate_download_lookup_paths(source_root)
+
+        for path_text in lookup_paths:
+            try:
+                download_hash = downloadhis.get_hash_by_fullpath(path_text)
+            except Exception:
+                download_hash = None
+            if download_hash:
+                history = downloadhis.get_by_hash(download_hash)
+                if history:
+                    return history
+
+            try:
+                download_files = downloadhis.get_files_by_fullpath(path_text) or []
+            except Exception:
+                download_files = []
+            for download_file in download_files:
+                if download_file and download_file.download_hash:
+                    history = downloadhis.get_by_hash(download_file.download_hash)
+                    if history:
+                        return history
+
+            try:
+                download_file = downloadhis.get_file_by_fullpath(path_text)
+            except Exception:
+                download_file = None
+            if download_file and download_file.download_hash:
+                history = downloadhis.get_by_hash(download_file.download_hash)
+                if history:
+                    return history
+
+            history = downloadhis.get_by_path(path_text)
+            if history:
+                return history
+
+        # 保存目录级文件清单：同目录单 hash，或文件名精确匹配
+        source_name = source_root.name
+        source_posix = source_root.as_posix()
+        for parent_path in list(source_root.parents)[:6]:
+            parent_text = parent_path.as_posix()
+            if parent_text in {"/", ""}:
+                continue
+            history = downloadhis.get_by_path(parent_text)
+            if history:
+                return history
+            try:
+                download_files = downloadhis.get_files_by_savepath(parent_text) or []
+            except Exception:
+                download_files = []
+            if not download_files:
+                continue
+            matched_hashes = set()
+            for item in download_files:
+                if not item or not item.download_hash:
+                    continue
+                fullpath = item.fullpath or ""
+                filepath = item.filepath or ""
+                if (
+                    fullpath == source_posix
+                    or fullpath.endswith("/" + source_name)
+                    or Path(fullpath).name == source_name
+                    or Path(filepath).name == source_name
+                    or (fullpath and Path(fullpath).parent == source_root.parent)
+                    or (source_root.is_dir() and fullpath.startswith(source_posix.rstrip("/") + "/"))
+                ):
+                    matched_hashes.add(item.download_hash)
+            if len(matched_hashes) == 1:
+                history = downloadhis.get_by_hash(next(iter(matched_hashes)))
+                if history:
+                    return history
+            # 整个保存目录只对应一个下载任务时，也视为归属该任务
+            all_hashes = {item.download_hash for item in download_files if item and item.download_hash}
+            if len(all_hashes) == 1:
+                history = downloadhis.get_by_hash(next(iter(all_hashes)))
+                if history:
+                    return history
+
+        return None
 
     @eventmanager.register(ChainEventType.TransferIntercept)
     def intercept_transfer(self, event: Event):
@@ -1246,7 +1469,7 @@ class DiscRemuxPlugin(_PluginBase):
         if not self._is_valid_disc_source(source_root):
             return
 
-        download_history = DownloadHistoryOper().get_by_path(source_root.as_posix())
+        download_history = self._resolve_intercept_download_history(source_root)
         if not download_history:
             logger.info(f"跳过非 MoviePilot 下载历史原盘: {source_root}")
             return
@@ -1399,67 +1622,29 @@ class DiscRemuxPlugin(_PluginBase):
                 self._active_intercepts.discard(dedupe_key)
 
     def _run_intercept_remux(self, dedupe_key: str, source_root: Path, output_file: Path, download_history, config: dict) -> None:
-        started_at = time.time()
+        """下载目录拦截后改为入队可视化任务，由 TaskManager 串行执行。"""
         try:
-            logger.info(f"开始下载目录原盘重封装: source={source_root}, output={output_file}")
-            remuxer = DiscRemuxer()
-            self._register_remuxer(remuxer)
-            remuxer.validate_environment()
-            remuxer.remux_to_mkv(
-                source_root_path=source_root.as_posix(),
-                output_file_path=output_file.as_posix(),
-            )
-            if bool(config.get("normalize_tracks", True)):
-                self._normalize_mkv_tracks(
-                    output_file,
-                    reset_video_language=bool(config.get("reset_video_language", True)),
-                )
-            finished_at = self._now_str()
-            self._update_history_record(
-                dedupe_key,
-                remux={
-                    "finished_at": finished_at,
-                    "duration_seconds": int(time.time() - started_at),
-                    "error": None,
+            logger.info(f"拦截原盘入队重封装: source={source_root}, output={output_file}")
+            task = self.enqueue_source_path(
+                source_root.as_posix(),
+                mode="intercept",
+                download_hash=self._history_value(download_history, "download_hash"),
+                downloader=self._history_value(download_history, "downloader"),
+                tmdbid=self._history_value(download_history, "tmdbid"),
+                media_type=self._history_value(download_history, "type"),
+                dedupe_key=dedupe_key,
+                extra={
+                    "output_path": output_file.as_posix(),
                 },
-                finished_at=finished_at,
             )
-            logger.info(
-                "下载目录原盘重封装完成: "
-                f"source={source_root}, output={output_file}, duration={int(time.time() - started_at)}s"
-            )
-
-            triggered_transfer, new_transfer_history_id = self._post_process_intercept_output(
-                output_file=output_file,
-                download_history=download_history,
-                config=config,
-            )
-
+            if not task:
+                raise RuntimeError("拦截任务入队失败")
             self._update_history_record(
                 dedupe_key,
-                status="success",
-                post_action={
-                    "source_cleanup": self._cleanup_intercept_source(source_root, config, download_history=download_history),
-                    "triggered_transfer": triggered_transfer,
-                    "new_transfer_history_id": new_transfer_history_id,
-                },
-                finished_at=self._now_str(),
+                status="waiting",
+                remux={"queued_at": self._now_str(), "task_id": task.id if hasattr(task, "id") else None},
             )
-            self._message = f"下载目录原盘重封装完成: {output_file}"
-            logger.info(
-                "下载器拦截重封装流程完成: "
-                f"source={source_root}, output={output_file}, triggered_transfer={triggered_transfer}, "
-                f"new_transfer_history_id={new_transfer_history_id}"
-            )
-        except subprocess.CalledProcessError as e:
-            error = e.stderr or str(e)
-            self._update_history_record(
-                dedupe_key,
-                status="failed",
-                remux={"error": error, "finished_at": self._now_str()},
-                finished_at=self._now_str(),
-            )
-            logger.error(f"拦截重封装失败: source={source_root}, error={error}")
+            self._message = f"拦截原盘已入队: {source_root.name}"
         except Exception as e:
             self._update_history_record(
                 dedupe_key,
@@ -1467,12 +1652,10 @@ class DiscRemuxPlugin(_PluginBase):
                 remux={"error": str(e), "finished_at": self._now_str()},
                 finished_at=self._now_str(),
             )
-            logger.error(f"拦截重封装处理失败: source={source_root}, error={e}", exc_info=True)
+            logger.error(f"拦截重封装入队失败: source={source_root}, error={e}", exc_info=True)
         finally:
             with self._intercept_lock:
                 self._active_intercepts.discard(dedupe_key)
-            if "remuxer" in locals():
-                self._unregister_remuxer(remuxer)
 
     @staticmethod
     def _normalize_mkv_tracks(output_file: Path, reset_video_language: bool = True) -> None:
@@ -1491,10 +1674,29 @@ class DiscRemuxPlugin(_PluginBase):
             logger.info(f"配置为不整理重封装 MKV，跳过后续整理: output={output_file}")
             return False, None
 
+        download_hash = self._history_value(download_history, "download_hash")
+        source_hint = None
+        try:
+            history_path = self._history_value(download_history, "path")
+            if history_path:
+                source_hint = Path(history_path)
+        except Exception:
+            source_hint = None
+        # 输出 MKV 同目录的 ISO/BDMV 也作为清理线索
+        try:
+            source_hint = source_hint or output_file.with_suffix(".iso")
+        except Exception:
+            pass
+        self._clear_stale_disc_transfer_histories(
+            download_hash=download_hash,
+            source_root=source_hint if source_hint and source_hint.exists() else output_file.parent,
+            output_file=output_file,
+        )
+
         logger.info(
             "开始整理重封装 MKV: "
             f"output={output_file}, downloader={self._history_value(download_history, 'downloader')}, "
-            f"hash={self._history_value(download_history, 'download_hash')}, "
+            f"hash={download_hash}, "
             f"tmdbid={self._history_value(download_history, 'tmdbid')}"
         )
         state, errmsg = self._transfer_remuxed_mkv(output_file, download_history)
@@ -1509,26 +1711,90 @@ class DiscRemuxPlugin(_PluginBase):
             self._refresh_media_server(transfer_history, output_file)
         return True, transfer_history.id if transfer_history else None
 
+    def _delete_source_disc_only(self, source_root: Path) -> bool:
+        """只删除源文件原盘（ISO/IMG/BDMV/CERTIFICATE），保留同目录已生成的 MKV。"""
+        if not source_root:
+            return False
+        deleted = False
+        try:
+            if self._is_disc_image_file(source_root):
+                self._delete_local_path_safely(source_root)
+                deleted = True
+                # 同目录残留 CERTIFICATE/BDMV 一并清理，但不动 *.mkv
+                parent = source_root.parent
+                for name in ("BDMV", "CERTIFICATE"):
+                    candidate = parent / name
+                    if candidate.exists():
+                        self._delete_local_path_safely(candidate)
+                        deleted = True
+                return deleted
+
+            # BDMV 影片目录
+            if source_root.is_dir():
+                bdmv = source_root / "BDMV"
+                cert = source_root / "CERTIFICATE"
+                if self._is_valid_bdmv_dir(bdmv):
+                    self._delete_local_path_safely(bdmv)
+                    deleted = True
+                if cert.exists():
+                    self._delete_local_path_safely(cert)
+                    deleted = True
+                for image in list(source_root.glob("*.iso")) + list(source_root.glob("*.img")):
+                    if self._is_disc_image_file(image):
+                        self._delete_local_path_safely(image)
+                        deleted = True
+                return deleted
+        except Exception as err:
+            logger.warning(f"删除源文件原盘失败: source={source_root}, error={err}")
+            raise
+        return deleted
+
     def _cleanup_source_disc_after_success(self, source_root: Path, source_disc_action: str, download_history=None) -> str:
-        """在新 MKV 成功入库后按策略处理源文件原盘，并绑定删除下载器原任务。"""
+        """MKV 成功入库后：源目录只留 MKV；删除 qB 任务但不删剩余源文件。
+
+        注意：绝不能 remove_torrents(delete_file=True)，否则会把刚生成的 MKV 一起删掉。
+        """
         if source_disc_action != "delete":
             logger.info(f"配置为保留源文件原盘: source={source_root}")
             return "keep"
-        if not self._is_valid_disc_source(source_root):
-            logger.info(f"源文件原盘已不存在，跳过源文件删除: source={source_root}")
-            return "source_missing"
+
+        disc_still_there = self._is_valid_disc_source(source_root)
+        disc_deleted = False
+        if disc_still_there:
+            disc_deleted = self._delete_source_disc_only(source_root)
+            logger.info(f"已删除源文件原盘并保留 MKV: source={source_root}, deleted={disc_deleted}")
+        else:
+            logger.info(f"源文件原盘已不存在，仅尝试删除下载器任务: source={source_root}")
+
         download_hash = self._history_value(download_history, "download_hash") if download_history else None
         downloader = self._history_value(download_history, "downloader") if download_history else None
+        torrent_deleted = False
         if download_hash:
             try:
-                result = self.chain.remove_torrents(hashs=[download_hash], delete_file=True, downloader=downloader)
-                logger.info(f"已删除下载器原任务并请求删除源文件: downloader={downloader}, hash={download_hash}, result={result}")
-                return "delete_source_and_torrent"
+                result = self.chain.remove_torrents(
+                    hashs=[download_hash],
+                    delete_file=False,
+                    downloader=downloader,
+                )
+                torrent_deleted = bool(result) if result is not None else True
+                logger.info(
+                    "已删除下载器原任务并保留源目录 MKV: "
+                    f"downloader={downloader}, hash={download_hash}, result={result}"
+                )
             except Exception as err:
-                logger.warning(f"删除下载器原任务失败，将继续删除本地源文件: downloader={downloader}, hash={download_hash}, error={err}")
-        self._delete_local_path_safely(source_root)
-        logger.info(f"已删除源文件原盘: {source_root}")
-        return "delete_source_only"
+                logger.warning(
+                    f"删除下载器原任务失败: downloader={downloader}, hash={download_hash}, error={err}"
+                )
+
+        if disc_deleted and torrent_deleted:
+            return "delete_disc_and_torrent_keep_mkv"
+        if disc_deleted:
+            return "delete_disc_keep_mkv"
+        if torrent_deleted:
+            return "delete_torrent_only"
+        if not disc_still_there:
+            return "source_missing"
+        return "cleanup_noop"
 
     def _cleanup_intercept_source(self, source_root: Path, config: dict, download_history=None) -> str:
         """兼容下载目录拦截流程的源文件原盘清理。"""
@@ -1549,6 +1815,84 @@ class DiscRemuxPlugin(_PluginBase):
             shutil.rmtree(source_path)
         else:
             source_path.unlink()
+
+    @classmethod
+    def _is_disc_transfer_history(cls, history) -> bool:
+        """判断整理记录是否指向 ISO/IMG/BDMV 原盘，而非 MKV。"""
+        if not history:
+            return False
+        src = (getattr(history, "src", None) or "").lower()
+        dest = (getattr(history, "dest", None) or "").lower()
+        markers = (".iso", ".img", "/bdmv", "bdmv/", "\bdmv", "certificate/")
+        if any(marker in src or marker in dest for marker in markers):
+            return True
+        return cls._is_bdmv_history(history)
+
+    def _clear_stale_disc_transfer_histories(
+            self,
+            download_hash: Optional[str] = None,
+            source_root: Optional[Path] = None,
+            output_file: Optional[Path] = None,
+    ) -> int:
+        """整理 MKV 前清理原盘相关旧转移记录，避免“已整理过”阻断或复用原盘记录。"""
+        oper = TransferHistoryOper()
+        candidates = []
+        if download_hash:
+            try:
+                candidates.extend(oper.list_by_hash(download_hash) or [])
+            except Exception as err:
+                logger.warning(f"按 hash 查询转移记录失败: hash={download_hash}, error={err}")
+
+        path_candidates: List[str] = []
+        if source_root is not None:
+            path_candidates.extend(self._candidate_download_lookup_paths(source_root))
+            if source_root.is_file():
+                path_candidates.append(source_root.as_posix())
+            else:
+                path_candidates.append((source_root / "BDMV").as_posix())
+        if output_file is not None:
+            # 仅清理失败的 MKV 记录；成功 MKV 记录留给 force 覆盖逻辑
+            try:
+                mkv_history = oper.get_by_src(output_file.as_posix(), storage="local")
+                if mkv_history and not bool(mkv_history.status):
+                    candidates.append(mkv_history)
+            except Exception:
+                pass
+
+        for path_text in path_candidates:
+            try:
+                history = oper.get_by_src(path_text, storage="local")
+                if history:
+                    candidates.append(history)
+            except Exception:
+                continue
+            try:
+                history = oper.get_by_dest(path_text)
+                if history:
+                    candidates.append(history)
+            except Exception:
+                continue
+
+        deleted = 0
+        seen = set()
+        for history in candidates:
+            if not history or getattr(history, "id", None) in seen:
+                continue
+            seen.add(history.id)
+            if not self._is_disc_transfer_history(history):
+                continue
+            try:
+                oper.delete(history.id)
+                deleted += 1
+                logger.info(
+                    "已删除原盘旧转移记录: "
+                    f"id={history.id}, src={getattr(history, 'src', None)}, dest={getattr(history, 'dest', None)}"
+                )
+            except Exception as err:
+                logger.warning(f"删除原盘旧转移记录失败: id={getattr(history, 'id', None)}, error={err}")
+        if deleted:
+            logger.info(f"整理前共清理 {deleted} 条原盘转移记录")
+        return deleted
 
     @staticmethod
     def _media_type_from_download_history(download_history) -> Optional[MediaType]:
@@ -1581,4 +1925,5 @@ class DiscRemuxPlugin(_PluginBase):
             download_hash=self._history_value(download_history, "download_hash"),
             transfer_type="link",
             sync_extra_files=False,
+            force=True,
         )
