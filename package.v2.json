@@ -1,43 +1,47 @@
 {
-    "SubtitleWebUploader": {
-        "id": "SubtitleWebUploader",
-        "name": "字幕网页上传器",
-        "description": "TG 网页入口 + Web 操作台，桥接字幕匹配插件完成字幕上传、在线字幕、字幕管理、时间轴处理和 AI 任务。",
-        "icon": "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/subtitle.png",
-        "version": "v0.3.0",
-        "author": "MoviePilot Agent",
-        "level": 1,
-        "v2": true,
-        "history": {
-            "v0.3.0": "重构移动端字幕操作台：新增在线字幕、字幕管理、历史字幕时间轴处理、AI任务取消，并优化上传/删除/AI交互。",
-            "v0.2.0": "新增TG网页入口与SubtitleManualUpload桥接能力。"
-        }
-    },
-    "DiscRemuxPlugin": {
-        "name": "蓝光原盘重封装",
-        "description": "只从源文件目录查找 ISO/BDMV 原盘，重封装为 MKV 后通过 MoviePilot 硬链接整理入库；源文件删除会绑定删除下载器原任务，并可清理旧入库原盘残留。",
-        "labels": "媒体整理,蓝光原盘,MKV",
-        "version": "2.4.1",
-        "icon": "https://raw.githubusercontent.com/the-bruz/MoviePilot-Plugins/main/icons/discremuxplugin.png",
-        "author": "bruz/local",
-        "level": 1,
-        "system_version": ">=2.0.0",
-        "history": {
-            "v2.0.0": "市场原版：基于整理历史或下载器拦截重封装蓝光原盘。",
-            "v2.1.0": "新增 MKV 轨道规范化：重封装后使用 mkvtoolnix 无损整理音轨/字幕轨标题，提升 Emby/播放器显示可读性。",
-            "v2.1.1": "修正轨道规范化细节：保留源默认轨标记、避免写入无意义的视频轨标题，并继续无损规范音轨/字幕轨。",
-            "v2.1.2": "修复 v2.1.1 审计发现的轨道规范化补丁未作用到运行模块问题，避免写入无意义视频轨标题并保留源默认/强制标记。",
-            "v2.1.3": "增强轨道命名泛化：识别 Atmos、评论轨、兼容音轨、国语/粤语、简繁/中英/SDH/地区/特效字幕等常见标题，不再仅按单一样本命名；新增配置迁移。",
-            "v2.2.0": "进一步精炼轨道命名为语言代码/特征/格式的紧凑风格，增强对多语言字幕、评论音轨、SDH、简繁双语和地区字幕的泛化能力。",
-            "v2.2.1": "抽样外语电影前 50 个大体积 MKV 后，进一步压缩语言、简繁双语、特效、地区和 Atmos/评论等轨道命名为“语言代码-特征-格式”。",
-            "v2.2.2": "收紧轨道命名策略：仅依据原盘/MakeMKV/mkvmerge 读到的轨道描述提取特征，识别不到用途时降级为语言代码-格式，避免人工补充误映射。",
-            "v2.2.3": "修正 Atmos 特征来源：除原始轨道标题外，也读取 mkvmerge/MakeMKV 编码描述中的 Atmos，仍不做人工补充猜测。",
-            "v2.3.0": "新增已入库原盘扫描模式：扫描源文件与硬链接库 BDMV，硬链接库仅作发现线索，优先在对应源文件目录重封装 MKV 后调用 MoviePilot 正常转移入库。",
-            "v2.3.1": "新增已入库原盘扫描只读预览 API，抽取任务构建逻辑，便于受控验证源文件到媒体库的重封装链路。",
-            "v2.3.2": "修复 MakeMKV 标题时长解析索引错误，避免误选短花絮片段；重封装主片时按 tinfo 的第 9 字段正确读取时长。",
-            "v2.3.3": "重封装改用独立临时目录接收 MakeMKV 输出，并用 ffprobe 校验输出时长，防止短片段或旧残留 MKV 被误入库。",
-            "v2.4.0": "新增 ISO/IMG 自动处理与 MakeMKV 输出稳定安全收尾；扫描来源收紧为源文件目录，多源文件根目录支持；重封装后强制通过 MoviePilot 硬链接转移入库。",
-            "v2.4.1": "重构原盘清理策略：新增“源文件 ISO/BDMV 保留/删除”选项，删除源文件时绑定删除下载器原任务；新增“旧入库 ISO/BDMV 处理”选项，成功入库新 MKV 后可删除硬链接库旧 BDMV/CERTIFICATE 或旧 ISO/IMG，且不删除新 MKV。"
-        }
+  "SubtitleWebUploader": {
+    "id": "SubtitleWebUploader",
+    "name": "字幕网页上传器",
+    "description": "TG 网页入口 + Web 操作台，桥接字幕匹配移动版完成上传、删除和 AI 任务。",
+    "icon": "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/subtitle.png",
+    "version": "0.5.2",
+    "author": "MoviePilot Agent",
+    "level": 1,
+    "v2": true,
+    "history": {
+      "v0.4.1": "Vue 联邦 UI 初版，桥接字幕匹配本体并保留 TG 入口。",
+      "v0.4.2": "桥接移动版字幕匹配，状态页显示实际桥接对象。",
+      "v0.4.3": "优化操作文案，改为更清晰的上传外挂 / 在线字幕 / 外挂管理 / AI翻译。",
+      "v0.5.0": "重设计为工作台布局，支持快速选集和底部批量动作栏。",
+      "v0.5.1": "支持拖拽上传、进度提示和批量操作提示。",
+      "v0.5.2": "补上传进度条与预估时间，继续收敛交互提示。"
     }
+  },
+  "DiscRemuxPlugin": {
+    "name": "蓝光原盘重封装",
+    "description": "只从源文件目录查找 ISO/BDMV 原盘，重封装为 MKV 后通过 MoviePilot 硬链接整理入库；源文件删除会绑定删除下载器原任务，并可清理旧入库原盘残留。",
+    "labels": "媒体整理,蓝光原盘,MKV",
+    "version": "2.4.1",
+    "icon": "https://raw.githubusercontent.com/the-bruz/MoviePilot-Plugins/main/icons/discremuxplugin.png",
+    "author": "bruz/local",
+    "level": 1,
+    "system_version": ">=2.0.0",
+    "history": {
+      "v2.0.0": "市场原版：基于整理历史或下载器拦截重封装蓝光原盘。",
+      "v2.1.0": "新增 MKV 轨道规范化：重封装后使用 mkvtoolnix 无损整理音轨/字幕轨标题，提升 Emby/播放器显示可读性。",
+      "v2.1.1": "修正轨道规范化细节：保留源默认轨标记、避免写入无意义的视频轨标题，并继续无损规范音轨/字幕轨。",
+      "v2.1.2": "修复 v2.1.1 审计发现的轨道规范化补丁未作用到运行模块问题，避免写入无意义视频轨标题并保留源默认/强制标记。",
+      "v2.1.3": "增强轨道命名泛化：识别 Atmos、评论轨、兼容音轨、国语/粤语、简繁/中英/SDH/地区/特效字幕等常见标题，不再仅按单一样本命名；新增配置迁移。",
+      "v2.2.0": "进一步精炼轨道命名为语言代码/特征/格式的紧凑风格，增强对多语言字幕、评论音轨、SDH、简繁双语和地区字幕的泛化能力。",
+      "v2.2.1": "抽样外语电影前 50 个大体积 MKV 后，进一步压缩语言、简繁双语、特效、地区和 Atmos/评论等轨道命名为“语言代码-特征-格式”。",
+      "v2.2.2": "收紧轨道命名策略：仅依据原盘/MakeMKV/mkvmerge 读到的轨道描述提取特征，识别不到用途时降级为语言代码-格式，避免人工补充误映射。",
+      "v2.2.3": "修正 Atmos 特征来源：除原始轨道标题外，也读取 mkvmerge/MakeMKV 编码描述中的 Atmos，仍不做人工补充猜测。",
+      "v2.3.0": "新增已入库原盘扫描模式：扫描源文件与硬链接库 BDMV，硬链接库仅作发现线索，优先在对应源文件目录重封装 MKV 后调用 MoviePilot 正常转移入库。",
+      "v2.3.1": "新增已入库原盘扫描只读预览 API，抽取任务构建逻辑，便于受控验证源文件到媒体库的重封装链路。",
+      "v2.3.2": "修复 MakeMKV 标题时长解析索引错误，避免误选短花絮片段；重封装主片时按 tinfo 的第 9 字段正确读取时长。",
+      "v2.3.3": "重封装改用独立临时目录接收 MakeMKV 输出，并用 ffprobe 校验输出时长，防止短片段或旧残留 MKV 被误入库。",
+      "v2.4.0": "新增 ISO/IMG 自动处理与 MakeMKV 输出稳定安全收尾；扫描来源收紧为源文件目录，多源文件根目录支持；重封装后强制通过 MoviePilot 硬链接转移入库。",
+      "v2.4.1": "重构原盘清理策略：新增“源文件 ISO/BDMV 保留/删除”选项，删除源文件时绑定删除下载器原任务；新增“旧入库 ISO/BDMV 处理”选项，成功入库新 MKV 后可删除硬链接库旧 BDMV/CERTIFICATE 或旧 ISO/IMG，且不删除新 MKV。"
+    }
+  }
 }
