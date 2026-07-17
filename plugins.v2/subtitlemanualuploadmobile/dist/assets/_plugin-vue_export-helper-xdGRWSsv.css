@@ -1,0 +1,571 @@
+:root {
+  --smu-page-bg:
+    radial-gradient(circle at 12% 12%, rgba(var(--v-theme-primary), 0.08), transparent 28%),
+    radial-gradient(circle at 88% 0%, rgba(var(--v-theme-secondary), 0.06), transparent 32%),
+    rgb(var(--v-theme-background));
+  --smu-dialog-bg:
+    radial-gradient(circle at 12% 0%, rgba(var(--v-theme-primary), 0.08), transparent 30%),
+    rgba(var(--v-theme-surface), 0.96);
+  --smu-dialog-bar-bg: rgba(var(--v-theme-surface), 0.92);
+  --smu-card-bg: rgba(var(--v-theme-surface), 0.82);
+  --smu-card-bg-strong: rgba(var(--v-theme-surface), 0.94);
+  --smu-card-bg-soft: rgba(var(--v-theme-surface-variant), 0.22);
+  --smu-card-bg-hover: rgba(var(--v-theme-primary), 0.08);
+  --smu-card-bg-active: rgba(var(--v-theme-primary), 0.14);
+  --smu-card-bg-disabled: rgba(var(--v-theme-surface-variant), 0.32);
+  --smu-border: rgba(var(--v-theme-on-surface), 0.12);
+  --smu-border-strong: rgba(var(--v-theme-on-surface), 0.18);
+  --smu-border-active: rgba(var(--v-theme-primary), 0.46);
+  --smu-text: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity, 0.87));
+  --smu-text-muted: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity, 0.62));
+  --smu-text-soft: rgba(var(--v-theme-on-surface), 0.48);
+  --smu-accent: rgb(var(--v-theme-primary));
+  --smu-accent-soft: rgba(var(--v-theme-primary), 0.12);
+  --smu-accent-text: rgb(var(--v-theme-on-primary));
+  --smu-success-soft: rgba(var(--v-theme-success), 0.14);
+  --smu-success-text: rgb(var(--v-theme-success));
+  --smu-warning-soft: rgba(var(--v-theme-warning), 0.14);
+  --smu-warning-text: rgb(var(--v-theme-warning));
+  --smu-error-soft: rgba(var(--v-theme-error), 0.14);
+  --smu-error-text: rgb(var(--v-theme-error));
+  --smu-shadow: 0 18px 48px rgba(0, 0, 0, 0.10);
+  --smu-poster-bg: rgba(var(--v-theme-primary), 0.18);
+}
+
+html[data-theme='dark'],
+html[data-theme='purple'],
+html[data-theme='transparent'],
+body[data-theme='dark'],
+body[data-theme='purple'],
+body[data-theme='transparent'] {
+  --smu-page-bg:
+    radial-gradient(circle at 12% 12%, rgba(var(--v-theme-primary), 0.14), transparent 28%),
+    radial-gradient(circle at 88% 0%, rgba(var(--v-theme-secondary), 0.10), transparent 32%),
+    rgb(var(--v-theme-background));
+  --smu-dialog-bg:
+    radial-gradient(circle at 12% 0%, rgba(var(--v-theme-primary), 0.10), transparent 30%),
+    rgba(var(--v-theme-surface), 0.92);
+  --smu-dialog-bar-bg: rgba(var(--v-theme-surface), 0.78);
+  --smu-card-bg: rgba(var(--v-theme-surface), 0.68);
+  --smu-card-bg-strong: rgba(var(--v-theme-surface), 0.86);
+  --smu-card-bg-soft: rgba(var(--v-theme-surface-variant), 0.18);
+  --smu-card-bg-hover: rgba(var(--v-theme-primary), 0.12);
+  --smu-card-bg-active: rgba(var(--v-theme-primary), 0.18);
+  --smu-card-bg-disabled: rgba(var(--v-theme-surface-variant), 0.22);
+  --smu-border: rgba(var(--v-theme-on-surface), 0.14);
+  --smu-border-strong: rgba(var(--v-theme-on-surface), 0.22);
+  --smu-shadow: 0 22px 58px rgba(0, 0, 0, 0.28);
+}
+
+html[data-theme='transparent'],
+body[data-theme='transparent'],
+html[data-theme='purple'],
+body[data-theme='purple'] {
+  color-scheme: dark;
+}
+
+html[data-theme='transparent'],
+body[data-theme='transparent'] {
+  --smu-page-bg: transparent;
+  --smu-dialog-bg:
+    radial-gradient(circle at 12% 0%, rgba(var(--v-theme-primary), 0.12), transparent 30%),
+    rgba(var(--v-theme-surface), var(--transparent-opacity-heavy, 0.62));
+  --smu-dialog-bar-bg: rgba(var(--v-theme-surface), var(--transparent-opacity-light, 0.22));
+  --smu-card-bg: rgba(var(--v-theme-surface), var(--transparent-opacity-light, 0.24));
+  --smu-card-bg-strong: rgba(var(--v-theme-surface), var(--transparent-opacity-heavy, 0.58));
+  --smu-card-bg-soft: rgba(var(--v-theme-surface), var(--transparent-opacity-light, 0.18));
+  --smu-card-bg-disabled: rgba(var(--v-theme-surface), var(--transparent-opacity-light, 0.16));
+}
+
+/* v0.1.82 移动端响应式与可读性增强：参考 MoviePilot/Vuetify 599.98px、959.98px 断点，以插件根类收敛作用域。 */
+.subtitlemanualupload-page-wrapper,
+.subtitlemanualupload-config,
+.subtitle-upload-page {
+  color: var(--smu-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+.subtitlemanualupload-page-wrapper,
+.subtitlemanualupload-config {
+  --smu-mobile-safe-x: max(12px, env(safe-area-inset-left));
+  --smu-mobile-safe-r: max(12px, env(safe-area-inset-right));
+  --smu-mobile-safe-bottom: max(14px, env(safe-area-inset-bottom));
+}
+
+.subtitle-upload-page .episode-row,
+.subtitle-upload-page .subtitle-history-item,
+.subtitle-upload-page .online-result-card,
+.subtitle-upload-page .preview-row,
+.subtitle-upload-page .history-target-row {
+  border-color: var(--smu-border-strong) !important;
+}
+
+@media (max-width: 960px) {
+  .subtitlemanualupload-page-wrapper {
+    min-height: 100dvh;
+    background: var(--smu-page-bg);
+  }
+
+  .subtitle-upload-page {
+    min-height: calc(100dvh - 57px);
+    padding: 12px var(--smu-mobile-safe-r) calc(84px + var(--smu-mobile-safe-bottom)) var(--smu-mobile-safe-x) !important;
+    font-family: "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", system-ui, sans-serif !important;
+  }
+
+  .subtitle-upload-page .hero-card {
+    padding: 18px !important;
+    margin-bottom: 12px !important;
+    border-radius: 22px !important;
+  }
+
+  .subtitle-upload-page .hero-card h1 {
+    font-size: clamp(1.8rem, 8vw, 2.45rem) !important;
+    line-height: 1.08 !important;
+  }
+
+  .subtitle-upload-page .hero-card p {
+    font-size: .98rem !important;
+    line-height: 1.62 !important;
+    color: var(--smu-text) !important;
+    opacity: .82;
+  }
+
+  .subtitle-upload-page .root-tabs {
+    position: sticky;
+    top: 57px;
+    z-index: 20;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px !important;
+    margin: 0 -2px 12px !important;
+    padding: 8px 2px;
+    background: linear-gradient(to bottom, var(--smu-dialog-bar-bg), rgba(var(--v-theme-surface), 0));
+    backdrop-filter: blur(16px);
+  }
+
+  .subtitle-upload-page .root-tabs button {
+    min-height: 42px;
+    padding: 10px 12px !important;
+    font-size: 1rem;
+    color: var(--smu-text) !important;
+  }
+
+  .subtitle-upload-page .media-stage,
+  .subtitle-upload-page .episode-stage {
+    gap: 12px !important;
+  }
+
+  .subtitle-upload-page .toolbar-row,
+  .subtitle-upload-page .detail-head,
+  .subtitle-upload-page .selected-media,
+  .subtitle-upload-page .history-toolbar,
+  .subtitle-upload-page .dialog-actions,
+  .subtitle-upload-page .subtitle-history-actions {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+
+  .subtitle-upload-page .selected-media h2,
+  .subtitle-upload-page .section-title,
+  .subtitle-upload-page .media-title,
+  .subtitle-upload-page .history-title {
+    font-size: 1.2rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .subtitle-upload-page .section-kicker {
+    font-size: .8rem !important;
+    letter-spacing: .08em;
+  }
+
+  .subtitle-upload-page .media-grid,
+  .subtitle-upload-page .history-grid,
+  .subtitle-upload-page .season-strip,
+  .subtitle-upload-page .episode-list,
+  .subtitle-upload-page .subtitle-history-list,
+  .subtitle-upload-page .result-panel,
+  .subtitle-upload-page .preview-list,
+  .subtitle-upload-page .online-results,
+  .subtitle-upload-page .auto-transfer-list,
+  .subtitle-upload-page .task-list {
+    gap: 10px !important;
+  }
+
+  .subtitle-upload-page .media-grid,
+  .subtitle-upload-page .history-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .subtitle-upload-page .media-card,
+  .subtitle-upload-page .history-card {
+    border-radius: 20px !important;
+  }
+
+  .subtitle-upload-page .episode-row,
+  .subtitle-upload-page .subtitle-history-item,
+  .subtitle-upload-page .preview-row,
+  .subtitle-upload-page .online-result-card,
+  .subtitle-upload-page .history-target-row,
+  .subtitle-upload-page .result-row {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) !important;
+    gap: 10px !important;
+    padding: 12px !important;
+    border-radius: 18px !important;
+    background: var(--smu-card-bg) !important;
+  }
+
+  .subtitle-upload-page .episode-copy,
+  .subtitle-upload-page .subtitle-history-copy,
+  .subtitle-upload-page .history-copy,
+  .subtitle-upload-page .preview-copy {
+    min-width: 0;
+  }
+
+  .subtitle-upload-page .episode-title,
+  .subtitle-upload-page .subtitle-history-copy strong,
+  .subtitle-upload-page .preview-title {
+    font-size: 1.04rem !important;
+    line-height: 1.35 !important;
+  }
+
+  .subtitle-upload-page .episode-path,
+  .subtitle-upload-page .subtitle-history-copy small,
+  .subtitle-upload-page .history-path,
+  .subtitle-upload-page .preview-path {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: .88rem !important;
+    line-height: 1.45 !important;
+  }
+
+  .subtitlemanualupload-config .config-shell {
+    padding: 12px var(--smu-mobile-safe-r) calc(76px + var(--smu-mobile-safe-bottom)) var(--smu-mobile-safe-x) !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .subtitle-upload-page {
+    padding-top: 10px !important;
+  }
+
+  .subtitle-upload-page .media-grid,
+  .subtitle-upload-page .history-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .subtitle-upload-page .season-strip {
+    display: flex !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 4px;
+  }
+
+  .subtitle-upload-page .season-card {
+    min-width: 132px !important;
+    scroll-snap-align: start;
+  }
+
+  .subtitle-upload-page .mini-poster {
+    width: 64px !important;
+    height: 92px !important;
+    flex: 0 0 auto;
+  }
+
+  .subtitle-upload-page .selected-media {
+    align-items: flex-start !important;
+  }
+
+  .subtitle-upload-page .episode-row,
+  .subtitle-upload-page .subtitle-history-item,
+  .subtitle-upload-page .preview-row,
+  .subtitle-upload-page .online-result-card {
+    grid-template-columns: 1fr !important;
+  }
+
+  .subtitle-upload-page .episode-index,
+  .subtitle-upload-page .episode-actions,
+  .subtitle-upload-page .subtitle-history-actions,
+  .subtitle-upload-page .preview-actions {
+    width: 100% !important;
+  }
+
+  .subtitle-upload-page .episode-actions,
+  .subtitle-upload-page .subtitle-history-actions,
+  .subtitle-upload-page .preview-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+
+/* v0.1.82 二次移动端适配：按 MP/Vuetify 断点重排布局，而不是只缩小桌面 UI。 */
+
+@media (max-width: 959.98px) {
+  .subtitlemanualupload-page-wrapper,
+  .subtitlemanualupload-config {
+    --smu-mobile-safe-x: max(14px, env(safe-area-inset-left));
+    --smu-mobile-safe-r: max(14px, env(safe-area-inset-right));
+    --smu-mobile-safe-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  .subtitlemanualupload-page-wrapper .sticky-toolbar {
+    min-height: 58px !important;
+    padding-inline: 8px !important;
+  }
+
+  .subtitlemanualupload-page-wrapper .sticky-toolbar .text-h6 {
+    margin-left: 6px !important;
+    font-size: 1.28rem !important;
+    font-weight: 950 !important;
+  }
+
+  .subtitle-upload-page {
+    font-size: 16px !important;
+  }
+
+  .subtitle-upload-page .hero-card {
+    background:
+      linear-gradient(135deg, rgba(var(--v-theme-primary), .20), rgba(var(--v-theme-surface), .92) 55%),
+      var(--smu-card-bg-strong) !important;
+  }
+
+  .subtitle-upload-page .hero-card h1 {
+    margin-bottom: 8px !important;
+    font-size: clamp(2rem, 7.2vw, 2.75rem) !important;
+    font-weight: 1000 !important;
+    letter-spacing: -.045em !important;
+  }
+
+  .subtitle-upload-page .hero-card p {
+    max-width: 32em;
+    font-size: 1.04rem !important;
+    font-weight: 700 !important;
+  }
+
+  .subtitle-upload-page .root-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    border-bottom: 1px solid var(--smu-border);
+  }
+
+  .subtitle-upload-page .root-tabs button {
+    border: 1px solid var(--smu-border-strong) !important;
+    border-radius: 999px !important;
+    background: var(--smu-card-bg-strong) !important;
+    box-shadow: 0 10px 26px rgba(0,0,0,.08);
+  }
+
+  .subtitle-upload-page .root-tabs button.active {
+    border-color: var(--smu-border-active) !important;
+    background: linear-gradient(135deg, rgba(var(--v-theme-primary), .24), var(--smu-card-bg-strong)) !important;
+    color: var(--smu-text) !important;
+  }
+
+  .subtitle-upload-page .media-list,
+  .subtitle-upload-page .history-list,
+  .subtitle-upload-page .history-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .subtitle-upload-page .media-card {
+    grid-template-columns: 76px minmax(0, 1fr) 28px !important;
+    min-height: 122px !important;
+    padding: 14px !important;
+    border-radius: 22px !important;
+  }
+
+  .subtitle-upload-page .poster-frame {
+    width: 76px !important;
+    height: 104px !important;
+    border-radius: 18px !important;
+  }
+
+  .subtitle-upload-page .media-copy h3,
+  .subtitle-upload-page .media-title,
+  .subtitle-upload-page .history-title {
+    font-size: 1.16rem !important;
+    line-height: 1.24 !important;
+    font-weight: 950 !important;
+  }
+
+  .subtitle-upload-page .media-copy p,
+  .subtitle-upload-page .history-meta,
+  .subtitle-upload-page .media-meta {
+    font-size: .94rem !important;
+    line-height: 1.5 !important;
+    font-weight: 700 !important;
+  }
+
+  .subtitle-upload-page .selected-media {
+    grid-template-columns: 46px 66px minmax(0, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .subtitle-upload-page .selected-media h2 {
+    font-size: clamp(1.25rem, 5vw, 1.7rem) !important;
+    line-height: 1.18 !important;
+  }
+
+  .subtitle-upload-page .selected-media p {
+    font-size: .96rem !important;
+    font-weight: 700 !important;
+  }
+
+  .subtitle-upload-page .back-btn {
+    width: 46px !important;
+    height: 46px !important;
+  }
+
+  .subtitle-upload-page .toolbar-row {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    padding: 12px !important;
+  }
+
+  .subtitle-upload-page .episode-list {
+    gap: 12px !important;
+  }
+
+  .subtitle-upload-page .episode-row {
+    grid-template-columns: 42px 42px minmax(58px, auto) minmax(0, 1fr) !important;
+    align-items: start !important;
+    padding: 14px !important;
+    border-radius: 22px !important;
+  }
+
+  .subtitle-upload-page .episode-title {
+    font-size: 1.08rem !important;
+    font-weight: 950 !important;
+  }
+
+  .subtitle-upload-page .episode-path {
+    font-size: .92rem !important;
+    color: var(--smu-text-muted) !important;
+  }
+
+  .subtitle-upload-page .history-status span,
+  .subtitle-upload-page .timeline-meta {
+    font-size: .82rem !important;
+    font-weight: 800 !important;
+  }
+
+  .subtitle-upload-page .dialog-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+  }
+
+  .subtitle-upload-page .dropzone {
+    min-height: 230px !important;
+    padding: 22px 16px !important;
+    border-width: 2px !important;
+    border-radius: 24px !important;
+  }
+
+  .subtitle-upload-page .dropzone-title {
+    font-size: 1.3rem !important;
+    font-weight: 1000 !important;
+  }
+
+  .subtitle-upload-page .dropzone-text,
+  .subtitle-upload-page .support-row {
+    font-size: .96rem !important;
+    font-weight: 700 !important;
+  }
+
+  .subtitle-upload-page .preview-head,
+  .subtitle-upload-page .batch-language {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .subtitle-upload-page .preview-row {
+    grid-template-columns: 40px minmax(0, 1fr) !important;
+    align-items: start !important;
+  }
+}
+
+@media (max-width: 599.98px) {
+  .subtitlemanualupload-page-wrapper .sticky-toolbar {
+    min-height: 54px !important;
+  }
+
+  .subtitlemanualupload-page-wrapper .sticky-toolbar .text-h6 {
+    font-size: 1.18rem !important;
+  }
+
+  .subtitle-upload-page {
+    padding: 10px var(--smu-mobile-safe-r) calc(96px + var(--smu-mobile-safe-bottom)) var(--smu-mobile-safe-x) !important;
+  }
+
+  .subtitle-upload-page .hero-card {
+    padding: 18px 16px !important;
+  }
+
+  .subtitle-upload-page .root-tabs {
+    top: 54px !important;
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .subtitle-upload-page .media-card {
+    grid-template-columns: 70px minmax(0, 1fr) !important;
+  }
+
+  .subtitle-upload-page .poster-frame {
+    width: 70px !important;
+    height: 98px !important;
+  }
+
+  .subtitle-upload-page .selected-media {
+    grid-template-columns: 44px 58px minmax(0, 1fr) !important;
+  }
+
+  .subtitle-upload-page .mini-poster {
+    width: 58px !important;
+    height: 84px !important;
+  }
+
+  .subtitle-upload-page .toolbar-row,
+  .subtitle-upload-page .dialog-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .subtitle-upload-page .episode-row {
+    grid-template-columns: 38px minmax(54px, auto) minmax(0, 1fr) !important;
+    gap: 9px !important;
+  }
+
+  .subtitle-upload-page .episode-row > .episode-expand-btn {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .subtitle-upload-page .episode-index {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    min-width: 54px !important;
+    min-height: 42px !important;
+    align-self: start;
+  }
+
+  .subtitle-upload-page .episode-copy {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+
+  .subtitle-upload-page .episode-expanded {
+    padding: 12px !important;
+  }
+
+  .subtitle-upload-page .subtitle-history-actions,
+  .subtitle-upload-page .episode-actions,
+  .subtitle-upload-page .preview-actions {
+    grid-template-columns: 1fr !important;
+  }
+}
