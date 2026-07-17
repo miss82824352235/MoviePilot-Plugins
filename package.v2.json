@@ -58,5 +58,18 @@
       "v0.13.3": "清理旧原生订阅桥接、偏好组等待和通知文案残留，回归 BT/RSS 番剧订阅中心主链路。",
       "v0.14.0": "重构首页数据接口与前端加载链路，清理原生订阅桥接残留入口，优化订阅卡片、候选池和异常处理的交互文案。"
     }
+  },
+  "AutoSubv3": {
+    "name": "AI字幕生成(联动版)",
+    "description": "自动生成字幕并翻译成中文，支持成品字幕自动清理 AI/CC 味内容。",
+    "labels": "字幕,AI,翻译",
+    "version": "3.5.67-cleanup",
+    "icon": "autosubtitles.jpeg",
+    "author": "ifsherlock,local",
+    "level": 2,
+    "system_version": ">=2.13.5",
+    "history": {
+      "v3.5.67-cleanup": "增加成品字幕自动清理器，输出前自动去除环境声、动作括注和说话人标签。"
+    }
   }
 }
