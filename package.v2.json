@@ -61,15 +61,16 @@
   },
   "AutoSubv3": {
     "name": "AI字幕生成(联动版)",
-    "description": "自动生成字幕并翻译成中文，支持成品字幕自动清理 AI/CC 味内容。",
-    "labels": "字幕,AI,翻译",
-    "version": "3.5.67-cleanup",
+    "description": "自动生成字幕并翻译成中文，支持 faster-whisper 识别、字幕提取、大模型并发翻译，并可联动字幕匹配功能。",
+    "version": "3.5.69",
     "icon": "autosubtitles.jpeg",
-    "author": "ifsherlock,local",
-    "level": 2,
-    "system_version": ">=2.13.5",
+    "author": "ifsherlock",
+    "author_url": "https://github.com/ifsherlock",
+    "v2": true,
     "history": {
-      "v3.5.67-cleanup": "增加成品字幕自动清理器，输出前自动去除环境声、动作括注和说话人标签。"
+      "v3.5.69": "修复成品字幕清理：兼容压扁 SRT 重拆，cue 间保留标准空行。",
+      "v3.5.68": "修复清理器拼接导致 cue 空行丢失。",
+      "v3.5.67": "成品字幕自动清理 AI/CC/SDH 味内容。"
     }
   },
   "SubtitleManualUploadMobile": {
