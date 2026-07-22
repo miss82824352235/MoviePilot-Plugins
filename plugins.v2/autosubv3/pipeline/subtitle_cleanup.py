@@ -96,21 +96,21 @@ class SubtitleCleanupService:
                 fh.write(cleaned)
         return stats
 
+    _CUE_HEADER_RE = re.compile(
+        r"(?m)^(?P<index>\d+)\s*\n"
+        r"(?P<time>\d{2}:\d{2}:\d{2}[,\.]\d{1,3}\s*-->\s*\d{2}:\d{2}:\d{2}[,\.]\d{1,3})\s*\n"
+    )
+
     def clean_srt_text(self, text: str) -> Tuple[str, SubtitleCleanupStats]:
         """清理 SRT 文本并返回新文本与统计。"""
         stats = SubtitleCleanupStats()
         if not self.enabled() or not text:
             return text, stats
         newline = "\n"
-        normalized = text.replace("\r\n", "\n").replace("\r", "\n")
-        blocks = re.split(r"\n\s*\n", normalized.strip()) if normalized.strip() else []
+        cues = self._split_cues(text)
         output_blocks: List[str] = []
         new_index = 1
-        for raw_block in blocks:
-            parsed = self._parse_block(raw_block)
-            if not parsed:
-                continue
-            _old_index, time_line, body_lines = parsed
+        for _old_index, time_line, body_lines in cues:
             stats.total_blocks += 1
             old_body = "\n".join(body_lines).strip()
             new_body_lines, changed, block_removed, block_stats = self._clean_body_lines(body_lines)
@@ -126,12 +126,46 @@ class SubtitleCleanupService:
             if changed or new_body != old_body:
                 stats.changed_blocks += 1
                 self._add_sample(stats, old_body, new_body)
+            # 标准 SRT 要求 cue 之间必须有空行分隔。
+            # 之前用单换行拼接会把合法 SRT 压成一整块，播放器无法解析。
             output_blocks.append(f"{new_index}\n{time_line}\n{new_body}")
             new_index += 1
-        result = newline.join(output_blocks)
+        result = (newline + newline).join(output_blocks)
         if output_blocks:
             result += newline
         return result, stats
+
+    def _split_cues(self, text: str) -> List[Tuple[str, str, List[str]]]:
+        """拆分 SRT cue。
+
+        兼容两种输入：
+        1. 标准 SRT（cue 之间有空行）
+        2. 被错误清理器压扁后的 SRT（cue 之间没有空行）
+        """
+        normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+        if not normalized.strip():
+            return []
+        matches = list(self._CUE_HEADER_RE.finditer(normalized))
+        if matches:
+            cues: List[Tuple[str, str, List[str]]] = []
+            for idx, match in enumerate(matches):
+                body_start = match.end()
+                body_end = matches[idx + 1].start() if idx + 1 < len(matches) else len(normalized)
+                body = normalized[body_start:body_end].strip("\n")
+                body_lines = [line.rstrip() for line in body.split("\n")] if body else []
+                while body_lines and not body_lines[-1].strip():
+                    body_lines.pop()
+                cues.append((match.group("index"), match.group("time").strip(), body_lines))
+            return cues
+
+        # 兜底：仍按空行拆，兼容极少数非标准时间轴格式。
+        blocks = re.split(r"\n\s*\n", normalized.strip())
+        cues = []
+        for raw_block in blocks:
+            parsed = self._parse_block(raw_block)
+            if parsed:
+                cues.append(parsed)
+        return cues
 
     @staticmethod
     def _parse_block(block: str) -> Tuple[str, str, List[str]]:
