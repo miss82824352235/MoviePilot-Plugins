@@ -1,20 +1,14 @@
 {
   "SubtitleWebUploader": {
-    "id": "SubtitleWebUploader",
     "name": "字幕网页上传器",
-    "description": "TG 网页入口 + Web 操作台，桥接字幕匹配移动版完成上传、删除和 AI 任务。",
+    "description": "TG 网页入口 + Web 操作台，桥接字幕匹配魔改版：上传/在线/外挂管理/AI 源策略/重做/在线→AI/备份恢复与任务进度。",
+    "version": "0.6.0",
     "icon": "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/subtitle.png",
-    "version": "0.5.2",
     "author": "MoviePilot Agent",
-    "level": 1,
-    "v2": true,
+    "repository": "https://github.com/miss82824352235/MoviePilot-Plugins",
     "history": {
-      "v0.4.1": "Vue 联邦 UI 初版，桥接字幕匹配本体并保留 TG 入口。",
-      "v0.4.2": "桥接移动版字幕匹配，状态页显示实际桥接对象。",
-      "v0.4.3": "优化操作文案，改为更清晰的上传外挂 / 在线字幕 / 外挂管理 / AI翻译。",
-      "v0.5.0": "重设计为工作台布局，支持快速选集和底部批量动作栏。",
-      "v0.5.1": "支持拖拽上传、进度提示和批量操作提示。",
-      "v0.5.2": "补上传进度条与预估时间，继续收敛交互提示。"
+      "v0.6.0": "对齐字幕匹配魔改版：AI 源策略/覆盖策略、AI 重做、在线字幕转 AI、外挂备份恢复、任务进度透传；重建 Vue 工作台。",
+      "v0.5.2": "桥接移动版与工作台稳定版"
     }
   },
   "DiscRemuxPlugin": {
