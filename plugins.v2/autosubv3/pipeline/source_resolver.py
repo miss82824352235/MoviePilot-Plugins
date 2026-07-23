@@ -1,5 +1,4 @@
-import iso639
-
+from ..core.lang_utils import normalize_iso_lang
 from ..core.models import ResolvedSource
 
 
@@ -90,8 +89,8 @@ class SourceResolver:
         ffmpeg_factory,
         logger=None,
     ):
-        subtitle_lang = iso639.to_iso639_1(subtitle_lang) \
-            if (subtitle_lang and iso639.find(subtitle_lang) and iso639.to_iso639_1(subtitle_lang)) else 'und'
+        # und/空语言码会导致后续路径与语言判断异常；统一回落 en
+        subtitle_lang = normalize_iso_lang(subtitle_lang, default="en")
         extracted_sub_path = f"{subtitle_file}.{subtitle_lang}.srt"
         ffmpeg_factory().extract_subtitle_from_video(video_file, extracted_sub_path, subtitle_index)
         if logger:
