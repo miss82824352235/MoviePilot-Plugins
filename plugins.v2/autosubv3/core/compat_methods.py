@@ -4,7 +4,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import iso639
 import srt
 from app.core.config import settings
 from app.core.context import MediaInfo
@@ -12,6 +11,7 @@ from app.log import logger
 from app.utils.system import SystemUtils
 
 from .config_schema import normalize_generation_mode, normalize_overwrite_policy, normalize_source_policy, normalize_text, normalize_trigger
+from .lang_utils import normalize_iso_lang
 from .models import (
     GenerationMode,
     OverwritePolicy,
@@ -263,6 +263,11 @@ class AutoSubv3CompatMixin:
         return lang.lower() in ('zh', 'chi', 'chs', 'cht', 'zh-cn', 'zh-tw', 'zh-hk', 'chinese')
 
     @staticmethod
+    def _AutoSubv3__normalize_iso_lang(lang: str, default: str = "en") -> str:
+        """将语言代码规范为 ISO-639-1；und/空值回落 default，避免 to_iso639_1 返回空串。"""
+        return normalize_iso_lang(lang, default=default)
+
+    @staticmethod
     def _AutoSubv3__subtitle_content_looks_chinese(subs: List[srt.Subtitle]) -> bool:
         text = "\n".join(str(getattr(item, "content", "") or "") for item in subs[:80])
         if not text.strip():
@@ -461,7 +466,11 @@ class AutoSubv3CompatMixin:
             if not subtitle_path.exists() or subtitle_path.suffix.lower() != ".srt":
                 logger.error(f"[GenSub] 指定字幕不可用或不是 SRT：{source_path}")
                 return False, None, None
-            lang = self._normalize_text(source_subtitle_lang) or "en"
+            # 与 LOCAL_EXTERNAL / 内嵌提取一致：eng/und/空码统一回落 ISO-639-1
+            lang = self._AutoSubv3__normalize_iso_lang(
+                self._normalize_text(source_subtitle_lang) or "en",
+                default="en",
+            )
             logger.info(f"[GenSub] 使用联动指定字幕：{subtitle_path.name} lang={lang}")
             return True, lang, (subtitle_path, ResolvedSource.MATCHED_EXTERNAL.value)
 
@@ -494,14 +503,24 @@ class AutoSubv3CompatMixin:
         if self._auto_detect_language:
             logger.info("已开启自动语言检测，将使用whisper模型自动识别语言")
             audio_lang = 'auto'
-        elif not iso639.find(audio_lang) or not iso639.to_iso639_1(audio_lang):
-            logger.info(f"字幕源偏好：{self._translate_preference} 未从音轨元数据中获取到语言信息")
-            audio_lang = 'auto'
+        else:
+            normalized_audio_lang = self._AutoSubv3__normalize_iso_lang(audio_lang, default="")
+            if not normalized_audio_lang:
+                logger.info(f"字幕源偏好：{self._translate_preference} 未从音轨元数据中获取到语言信息")
+                audio_lang = 'auto'
+            else:
+                audio_lang = normalized_audio_lang
 
         # 当字幕源偏好为origin_first时，优先使用音轨语言
         if self._translate_preference == "origin_first":
-            prefer_subtitle_langs = ['en', 'eng'] if audio_lang == 'auto' else [audio_lang,
-                                                                                iso639.to_iso639_1(audio_lang)]
+            if audio_lang == 'auto':
+                prefer_subtitle_langs = ['en', 'eng']
+            else:
+                prefer_subtitle_langs = [audio_lang]
+                if audio_lang == 'en':
+                    prefer_subtitle_langs.append('eng')
+                elif audio_lang == 'eng':
+                    prefer_subtitle_langs.append('en')
 
         def get_sub_path():
             video_dir, _ = os.path.split(video_file)
@@ -522,7 +541,7 @@ class AutoSubv3CompatMixin:
                     logger.info("[GenSub] 已指定本地外挂字幕，但未找到可用 SRT")
                     return False, None, None
                 logger.info(f"[GenSub] 使用本地外挂字幕：{exist_sub_name} lang={external_sub_lang}")
-                return True, iso639.to_iso639_1(external_sub_lang), (get_sub_path(), ResolvedSource.LOCAL_EXTERNAL.value)
+                return True, self._AutoSubv3__normalize_iso_lang(external_sub_lang, default="en"), (get_sub_path(), ResolvedSource.LOCAL_EXTERNAL.value)
 
         inner_sub_exist, subtitle_index, inner_sub_lang = False, None, None
         if policy in (SourcePolicy.AUTO.value, SourcePolicy.EMBEDDED.value):
@@ -545,7 +564,7 @@ class AutoSubv3CompatMixin:
         elif self._translate_preference == "english_only":
             if external_sub_exist:
                 logger.info(f"字幕源偏好：{self._translate_preference} 外挂字幕存在，字幕语言 {external_sub_lang}")
-                return True, iso639.to_iso639_1(external_sub_lang), (get_sub_path(), ResolvedSource.LOCAL_EXTERNAL.value)
+                return True, self._AutoSubv3__normalize_iso_lang(external_sub_lang), (get_sub_path(), ResolvedSource.LOCAL_EXTERNAL.value)
             elif inner_sub_exist:
                 logger.info(f"字幕源偏好：{self._translate_preference} 内嵌字幕存在，字幕语言 {inner_sub_lang}")
                 extract_subtitle = True
@@ -554,13 +573,13 @@ class AutoSubv3CompatMixin:
         else:  # english_first/origin_first
             if external_sub_exist and external_sub_lang in prefer_subtitle_langs:
                 logger.info(f"字幕源偏好：{self._translate_preference} 外挂字幕存在，字幕语言 {external_sub_lang}")
-                return True, iso639.to_iso639_1(external_sub_lang), (get_sub_path(), ResolvedSource.LOCAL_EXTERNAL.value)
+                return True, self._AutoSubv3__normalize_iso_lang(external_sub_lang), (get_sub_path(), ResolvedSource.LOCAL_EXTERNAL.value)
             elif inner_sub_exist and inner_sub_lang in prefer_subtitle_langs:
                 logger.info(f"字幕源偏好：{self._translate_preference} 内嵌字幕存在，字幕语言 {inner_sub_lang}")
                 extract_subtitle = True
             elif external_sub_exist:
                 logger.info(f"字幕源偏好：{self._translate_preference} 外挂字幕存在，字幕语言 {external_sub_lang}")
-                return True, iso639.to_iso639_1(external_sub_lang), (get_sub_path(), ResolvedSource.LOCAL_EXTERNAL.value)
+                return True, self._AutoSubv3__normalize_iso_lang(external_sub_lang), (get_sub_path(), ResolvedSource.LOCAL_EXTERNAL.value)
             elif inner_sub_exist:
                 logger.info(f"字幕源偏好：{self._translate_preference} 内嵌字幕存在，字幕语言 {inner_sub_lang}")
                 extract_subtitle = True
@@ -578,7 +597,7 @@ class AutoSubv3CompatMixin:
             )
         # 使用asr音轨识别字幕
         if audio_lang != 'auto':
-            audio_lang = iso639.to_iso639_1(audio_lang)
+            audio_lang = self._AutoSubv3__normalize_iso_lang(audio_lang, default="en")
 
         if not enable_asr and policy != SourcePolicy.ASR.value:
             logger.info(f"未开启语音识别，且无已有字幕文件，跳过后续处理")
