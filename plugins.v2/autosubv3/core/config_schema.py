@@ -8,10 +8,22 @@ def normalize_text(value: Any) -> str:
 
 
 def enum_value(enum_cls: Any, value: Any, default: str) -> str:
+    # 兼容直接传入 Enum 成员，避免 str(SourcePolicy.X) 变成 "SourcePolicy.X" 后回落 default
+    if isinstance(value, enum_cls):
+        return value.value
     text = str(value or "").strip()
+    if not text:
+        return default
     try:
         return enum_cls(text).value
     except Exception:
+        # 兼容大小写不敏感 value，以及 "SourcePolicy.AUTO" 这类 str(Enum)
+        lowered = text.lower()
+        for member in enum_cls:
+            if member.value.lower() == lowered or member.name.lower() == lowered:
+                return member.value
+            if lowered.endswith("." + member.name.lower()):
+                return member.value
         return default
 
 
