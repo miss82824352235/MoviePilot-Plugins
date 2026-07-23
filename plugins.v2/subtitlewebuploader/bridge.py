@@ -191,13 +191,115 @@ class SubtitleManualBridge:
         AiApi = self._import_api_class("ai_api", "AiApi")
         return await self._call(AiApi(plugin).ai_cancel, _JsonRequest(body))
 
+    async def ai_restart(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """调用字幕匹配重新生成 AI 字幕任务。"""
+        plugin = self._ensure_plugin()
+        AiApi = self._import_api_class("ai_api", "AiApi")
+        return await self._call(AiApi(plugin).ai_restart, _JsonRequest(body))
+
+    async def online_ai_submit(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """调用字幕匹配：在线字幕 → AI 翻译。"""
+        plugin = self._ensure_plugin()
+        AiApi = self._import_api_class("ai_api", "AiApi")
+        return await self._call(AiApi(plugin).online_ai_submit, _JsonRequest(body))
+
+    async def restore_subtitle_backup(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """调用字幕匹配恢复字幕备份。"""
+        plugin = self._ensure_plugin()
+        UploadApi = self._import_api_class("upload_api", "UploadApi")
+        return await self._call(UploadApi(plugin).restore_subtitle_backup, _JsonRequest(body))
+
+    def _enrich_task_progress(self, payload: Any) -> Any:
+        """确保任务列表透传 progress 相关字段，便于前端进度条。"""
+        if not isinstance(payload, dict):
+            return payload
+
+        def _normalize_task(task: Dict[str, Any]) -> Dict[str, Any]:
+            item = dict(task)
+            progress = item.get("progress")
+            if not isinstance(progress, dict):
+                progress = {}
+            percent = (
+                progress.get("percent")
+                if progress.get("percent") is not None
+                else item.get("progress_percent")
+            )
+            stage = progress.get("stage") or item.get("progress_stage") or item.get("stage")
+            message = (
+                progress.get("message")
+                or item.get("progress_message")
+                or item.get("message")
+                or item.get("status_text")
+            )
+            if percent is not None:
+                try:
+                    percent = float(percent)
+                except Exception:
+                    percent = None
+            progress = {
+                **progress,
+                "percent": percent,
+                "stage": stage,
+                "message": message,
+            }
+            item["progress"] = progress
+            if percent is not None:
+                item.setdefault("progress_percent", percent)
+            if stage:
+                item.setdefault("progress_stage", stage)
+            if message:
+                item.setdefault("progress_message", message)
+            return item
+
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+        if not isinstance(data, dict):
+            return payload
+
+        for key in ("tasks",):
+            tasks = data.get(key)
+            if isinstance(tasks, list):
+                data[key] = [_normalize_task(t) for t in tasks if isinstance(t, dict)]
+
+        ai_tasks = data.get("ai_tasks")
+        if isinstance(ai_tasks, dict):
+            nested = ai_tasks.get("tasks")
+            if isinstance(nested, list):
+                ai_tasks["tasks"] = [_normalize_task(t) for t in nested if isinstance(t, dict)]
+            by_target = ai_tasks.get("tasks_by_target")
+            if isinstance(by_target, dict):
+                ai_tasks["tasks_by_target"] = {
+                    k: [_normalize_task(t) for t in (v or []) if isinstance(t, dict)]
+                    if isinstance(v, list)
+                    else v
+                    for k, v in by_target.items()
+                }
+            one = ai_tasks.get("task_by_target")
+            if isinstance(one, dict):
+                ai_tasks["task_by_target"] = {
+                    k: _normalize_task(v) if isinstance(v, dict) else v for k, v in one.items()
+                }
+            data["ai_tasks"] = ai_tasks
+
+        if "data" in payload and isinstance(payload.get("data"), dict):
+            payload["data"] = data
+            return payload
+        return data
+
     async def task_status(self, body: Dict[str, Any]) -> Dict[str, Any]:
-        """汇总 AI、调轴和自动入库队列任务状态。"""
+        """汇总 AI、调轴和自动入库队列任务状态，并透传进度字段。"""
         plugin = self._ensure_plugin()
         facade = getattr(plugin, "automation", None)
         if facade and hasattr(facade, "task_status"):
-            return ok(await run_in_threadpool(facade.task_status, target_ids=body.get("target_ids"), limit=int(body.get("limit") or 100)))
-        return await self.ai_tasks(body)
+            result = await run_in_threadpool(
+                facade.task_status,
+                target_ids=body.get("target_ids"),
+                limit=int(body.get("limit") or 100),
+            )
+            # facade 可能返回已包装的 {code,data,message} 或裸 data
+            if isinstance(result, dict) and "code" in result:
+                return self._enrich_task_progress(result)
+            return self._enrich_task_progress(ok(result if isinstance(result, dict) else {"result": result}))
+        return self._enrich_task_progress(await self.ai_tasks(body))
 
     async def timeline_fix(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """调用字幕匹配历史外挂字幕调轴。"""
