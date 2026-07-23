@@ -162,14 +162,36 @@ class SubtitleWebApi:
         target_ids = body.get("target_ids") or []
         if not target_ids:
             raise HTTPException(status_code=400, detail="请先选择目标视频")
+        source_policy = str(body.get("source_policy") or "auto").strip() or "auto"
+        overwrite_policy = str(body.get("overwrite_policy") or ("skip" if source_policy == "auto" else "new_variant")).strip()
+        source_subtitle_path = str(body.get("source_subtitle_path") or body.get("subtitle_path") or "").strip()
         tasks = await self.bridge.task_status({"target_ids": target_ids, "limit": 100})
-        return ok({"target_ids": target_ids, "task_status": tasks, "need_confirm": True}, f"将提交 {len(target_ids)} 个目标的 AI 字幕任务")
+        return ok(
+            {
+                "target_ids": target_ids,
+                "source_policy": source_policy,
+                "overwrite_policy": overwrite_policy,
+                "source_subtitle_path": source_subtitle_path,
+                "task_status": tasks,
+                "need_confirm": True,
+            },
+            f"将提交 {len(target_ids)} 个目标的 AI 字幕任务（源={source_policy}，覆盖={overwrite_policy}）",
+        )
 
     async def ai_submit(self, request: Request) -> Dict[str, Any]:
-        """确认提交 AI 字幕任务。"""
+        """确认提交 AI 字幕任务，透传 source_policy / overwrite_policy / source_subtitle_path。"""
         body = await request.json()
         if not body.get("confirm"):
             return fail("提交 AI 字幕任务需要 confirm=true", 409, {"need_confirm": True})
+        # 默认策略与字幕匹配本体一致
+        source_policy = str(body.get("source_policy") or "auto").strip() or "auto"
+        if source_policy == "reuse":
+            source_policy = "auto"
+        body["source_policy"] = source_policy
+        if not body.get("overwrite_policy"):
+            body["overwrite_policy"] = "new_variant" if source_policy != "auto" else "skip"
+        if body.get("subtitle_path") and not body.get("source_subtitle_path"):
+            body["source_subtitle_path"] = body.get("subtitle_path")
         return await self.bridge.ai_submit(body)
 
     async def ai_cancel(self, request: Request) -> Dict[str, Any]:
@@ -179,8 +201,61 @@ class SubtitleWebApi:
             return fail("取消 AI 字幕任务需要 confirm=true", 409, {"need_confirm": True})
         return await self.bridge.ai_cancel(body)
 
+    async def ai_restart(self, request: Request) -> Dict[str, Any]:
+        """重新生成 AI 字幕任务（需 confirm）。"""
+        body = await request.json()
+        if not body.get("confirm"):
+            return fail("重新生成 AI 字幕任务需要 confirm=true", 409, {"need_confirm": True})
+        body.setdefault("source_policy", "reuse")
+        body.setdefault("overwrite_policy", "backup_replace")
+        if body.get("subtitle_path") and not body.get("source_subtitle_path"):
+            body["source_subtitle_path"] = body.get("subtitle_path")
+        return await self.bridge.ai_restart(body)
+
+    async def online_ai_submit(self, request: Request) -> Dict[str, Any]:
+        """在线字幕 → AI 翻译（需 confirm）。"""
+        body = await request.json()
+        if not body.get("confirm"):
+            return fail("在线字幕 AI 翻译需要 confirm=true", 409, {"need_confirm": True})
+        target_ids = body.get("target_ids") or []
+        results = body.get("results") or body.get("selected_results") or []
+        if not target_ids:
+            raise HTTPException(status_code=400, detail="请先选择目标视频")
+        if not results:
+            raise HTTPException(status_code=400, detail="请至少选择一个在线字幕结果")
+        body["results"] = results
+        return await self.bridge.online_ai_submit(body)
+
+    async def restore(self, request: Request) -> Dict[str, Any]:
+        """恢复字幕备份（需 confirm）。支持单条或 items 批量。"""
+        body = await request.json()
+        if not body.get("confirm"):
+            return fail("恢复字幕备份需要 confirm=true", 409, {"need_confirm": True})
+        items = body.get("items") or []
+        if not items and body.get("target_id"):
+            items = [body]
+        if not items:
+            raise HTTPException(status_code=400, detail="请指定要恢复的字幕备份")
+        results = []
+        failed = []
+        for item in items:
+            try:
+                payload = {
+                    "target_id": item.get("target_id"),
+                    "subtitle_path": item.get("subtitle_path") or item.get("path"),
+                    "subtitle_name": item.get("subtitle_name") or item.get("name"),
+                    "locked_target_ids": body.get("locked_target_ids") or item.get("locked_target_ids") or [],
+                }
+                results.append(await self.bridge.restore_subtitle_backup(payload))
+            except Exception as exc:
+                failed.append({"item": item, "reason": str(exc)})
+        return ok(
+            {"restored": results, "failed": failed},
+            f"恢复完成：成功 {len(results)}，失败 {len(failed)}",
+        )
+
     async def tasks(self, request: Request) -> Dict[str, Any]:
-        """查询字幕相关任务状态。"""
+        """查询字幕相关任务状态（含 progress 透传）。"""
         body = await request.json()
         return await self.bridge.task_status(body)
 
