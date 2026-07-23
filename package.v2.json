@@ -56,13 +56,14 @@
   "AutoSubv3": {
     "name": "AI字幕生成(联动版)",
     "description": "自动生成字幕并翻译成中文，支持 faster-whisper 识别、字幕提取、大模型并发翻译，并可联动字幕匹配功能。",
-    "version": "3.5.75",
+    "version": "3.5.76",
     "icon": "autosubtitles.jpeg",
     "author": "ifsherlock",
     "author_url": "https://github.com/ifsherlock",
     "v2": true,
     "history": {
-      "v3.5.75": "????????????????????????? ASR???????????????? WAV ??? 24 ??????",
+      "v3.5.76": "Fix MoviePilot version matching: active plugin and marketplace version now use the exact same semantic version.",
+      "v3.5.75": "Hot reload no longer cancels active ASR tasks; active temporary WAV files are retained; stale files expire after 24 hours.",
       "v3.5.74": "修复外挂字幕 GBK/非 UTF-8 编码读取失败；load_srt 多编码回退。",
       "v3.5.73": "MATCHED_EXTERNAL 返回语言统一 normalize；SourcePolicy 兼容 Enum/大小写。",
       "v3.5.72": "统一 lang_utils，收尾 bare to_iso639_1。",
