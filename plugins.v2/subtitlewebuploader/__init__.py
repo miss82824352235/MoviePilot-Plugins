@@ -25,9 +25,9 @@ class SubtitleWebUploader(_PluginBase):
     """字幕网页上传器插件。"""
 
     plugin_name = "字幕网页上传器"
-    plugin_desc = "TG 网页入口 + Web 操作台，桥接字幕匹配插件完成字幕上传、删除和 AI 任务。"
+    plugin_desc = "TG 网页入口 + Web 操作台，桥接字幕匹配魔改版：上传/在线/外挂管理/AI 源策略/重做/在线→AI/备份恢复与任务进度。"
     plugin_icon = "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/subtitle.png"
-    plugin_version = "v0.5.2"
+    plugin_version = "v0.6.0"
     plugin_author = "MoviePilot Agent"
     author_url = "https://github.com/jxxghp/MoviePilot"
     plugin_config_prefix = "subtitleweb_"
@@ -102,8 +102,11 @@ class SubtitleWebUploader(_PluginBase):
             {"path": "/subtitleweb_bridge/ai/preview", "endpoint": api.ai_preview, "methods": ["POST"], "allow_anonymous": True, "summary": "AI 字幕任务预检"},
             {"path": "/subtitleweb_bridge/ai/submit", "endpoint": api.ai_submit, "methods": ["POST"], "allow_anonymous": True, "summary": "确认提交 AI 字幕任务"},
             {"path": "/subtitleweb_bridge/ai/cancel", "endpoint": api.ai_cancel, "methods": ["POST"], "allow_anonymous": True, "summary": "取消 AI 字幕任务"},
+            {"path": "/subtitleweb_bridge/ai/restart", "endpoint": api.ai_restart, "methods": ["POST"], "allow_anonymous": True, "summary": "重新生成 AI 字幕任务"},
+            {"path": "/subtitleweb_bridge/online_ai/submit", "endpoint": api.online_ai_submit, "methods": ["POST"], "allow_anonymous": True, "summary": "在线字幕转 AI 翻译"},
+            {"path": "/subtitleweb_bridge/restore", "endpoint": api.restore, "methods": ["POST"], "allow_anonymous": True, "summary": "恢复字幕备份"},
             {"path": "/subtitleweb_bridge/timeline/fix", "endpoint": api.timeline_fix, "methods": ["POST"], "allow_anonymous": True, "summary": "历史外挂字幕调轴"},
-            {"path": "/subtitleweb_bridge/tasks", "endpoint": api.tasks, "methods": ["POST"], "allow_anonymous": True, "summary": "查询字幕任务状态"},
+            {"path": "/subtitleweb_bridge/tasks", "endpoint": api.tasks, "methods": ["POST"], "allow_anonymous": True, "summary": "查询字幕任务状态（含进度）"},
             {"path": "/subtitleweb_bridge/online/search", "endpoint": api.online_search, "methods": ["POST"], "allow_anonymous": True, "summary": "搜索在线字幕"},
             {"path": "/subtitleweb_bridge/online/download_preview", "endpoint": api.online_download_preview, "methods": ["POST"], "allow_anonymous": True, "summary": "在线字幕下载预览"},
         ]
