@@ -4,8 +4,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Callable, Tuple
 
-import iso639
-
+from ..core.lang_utils import normalize_iso_lang
 from ..core.models import OverwritePolicy, ResolvedSource
 
 
@@ -175,12 +174,10 @@ class SubtitleOutputService:
                     if normalized:
                         cur_subtitle_lang = normalized
                         continue
-                    try:
-                        iso639.to_iso639_1(part)
-                    except Exception:
+                    code = normalize_iso_lang(part, default="")
+                    if not code:
                         continue
-                    else:
-                        cur_subtitle_lang = iso639.to_iso639_1(part)
+                    cur_subtitle_lang = code
 
             return cur_subtitle_lang, cur_metadata
 
@@ -195,6 +192,26 @@ class SubtitleOutputService:
                 continue
 
             props_str = file[len(video_name) + 1: -len(ext)] if file.startswith(video_name + ".") else ""
+            # 同名外挂字幕无语言后缀时（如 movie.srt），原先会被直接跳过。
+            # english_first/非严格模式下应可作为候选源，避免明明有英文 SRT 却强行走 ASR。
+            if not props_str:
+                prefer_set = set()
+                if prefer_langs:
+                    for item in prefer_langs:
+                        key = str(item or "").strip().lower()
+                        if not key:
+                            continue
+                        prefer_set.add(key)
+                        prefer_set.add(language_aliases.get(key, key))
+                if prefer_langs and ("en" in prefer_set or "eng" in prefer_set):
+                    return True, "en", file
+                if prefer_langs:
+                    if not strict and second_lang is None:
+                        second_lang = "und"
+                        second_file = file
+                    continue
+                return True, "und", file
+
             subtitle_lang, metadata = parse_props(props_str)
 
             if not subtitle_lang:
