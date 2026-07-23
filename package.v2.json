@@ -56,20 +56,21 @@
   "AutoSubv3": {
     "name": "AI字幕生成(联动版)",
     "description": "自动生成字幕并翻译成中文，支持 faster-whisper 识别、字幕提取、大模型并发翻译，并可联动字幕匹配功能。",
-    "version": "3.5.74",
+    "version": "3.5.75",
     "icon": "autosubtitles.jpeg",
     "author": "ifsherlock",
     "author_url": "https://github.com/ifsherlock",
     "v2": true,
     "history": {
+      "v3.5.75": "????????????????????????? ASR???????????????? WAV ??? 24 ??????",
+      "v3.5.74": "修复外挂字幕 GBK/非 UTF-8 编码读取失败；load_srt 多编码回退。",
+      "v3.5.73": "MATCHED_EXTERNAL 返回语言统一 normalize；SourcePolicy 兼容 Enum/大小写。",
+      "v3.5.72": "统一 lang_utils，收尾 bare to_iso639_1。",
+      "v3.5.71": "语言码规范化：音轨/内嵌/外挂 bare to_iso639_1 统一回落；无后缀外挂 SRT 可作为英文源",
+      "v3.5.70": "修复 HuggingFace 代理空指针、优先本地 Whisper 模型；无语言后缀外挂 SRT 可被识别为英文源字幕。",
       "v3.5.69": "修复成品字幕清理：兼容压扁 SRT 重拆，cue 间保留标准空行。",
       "v3.5.68": "修复清理器拼接导致 cue 空行丢失。",
-      "v3.5.67": "成品字幕自动清理 AI/CC/SDH 味内容。",
-      "3.5.70": "修复 HuggingFace 代理空指针、优先本地 Whisper 模型；无语言后缀外挂 SRT 可被识别为英文源字幕。",
-      "v3.5.71": "语言码规范化：音轨/内嵌/外挂 bare to_iso639_1 统一回落；无后缀外挂 SRT 可作为英文源",
-      "v3.5.72": "统一 lang_utils，收尾 bare to_iso639_1。",
-      "v3.5.73": "MATCHED_EXTERNAL 返回语言统一 normalize；SourcePolicy 兼容 Enum/大小写。",
-      "3.5.74": "修复外挂字幕 GBK/非 UTF-8 编码读取失败；load_srt 多编码回退。"
+      "v3.5.67": "成品字幕自动清理 AI/CC/SDH 味内容。"
     }
   },
   "SubtitleManualUploadMobile": {
