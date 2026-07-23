@@ -1,6 +1,6 @@
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Tuple, Dict, Any, List, Optional
 from threading import Event, Lock
 from lxml import etree
@@ -53,7 +53,7 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
     # 主题色
     plugin_color = "#2C4F7E"
     # 插件版本
-    plugin_version = "3.5.74-srt-encoding"
+    plugin_version = "3.5.75-hot-reload"
     # 插件作者
     plugin_author = "ifsherlock"
     # 作者主页
@@ -117,14 +117,19 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
         if not config:
             return
         # 清理插件启动前的残留临时文件
+        # Do not remove active ASR temporary audio during a plugin hot reload.
         tempdir = tempfile.gettempdir()
-        for file in os.listdir(tempdir):
-            if file.startswith('autosub-'):
-                try:
-                    os.remove(os.path.join(tempdir, file))
-                    logger.info(f"清理残留临时文件：{file}")
-                except Exception:
-                    pass
+        stale_before = datetime.now().timestamp() - timedelta(hours=24).total_seconds()
+        for filename in os.listdir(tempdir):
+            if not filename.startswith("autosub-"):
+                continue
+            file_path = os.path.join(tempdir, filename)
+            try:
+                if os.path.isfile(file_path) and os.path.getmtime(file_path) < stale_before:
+                    os.remove(file_path)
+                    logger.info("Removed stale AutoSub temporary file: %s", filename)
+            except OSError:
+                pass
         self._tasks = self.load_tasks()
         self._enabled = config.get('enabled', False)
         self._clear_history = config.get('clear_history', False)
@@ -347,21 +352,25 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
         if not self._tasks:
             return 0
         restored = 0
+        stale_before = datetime.now() - timedelta(hours=24)
         for task in self._tasks.values():
             if task.status == TaskStatus.IN_PROGRESS:
+                updated_at = task.progress_updated_at or task.add_time
+                if updated_at and updated_at > stale_before:
+                    continue
                 task.status = TaskStatus.PENDING
                 task.runtime_token = ""
-                task.error_message = "服务重启中断，已恢复等待重试"
+                task.error_message = "??????????????"
                 task.progress_percent = 0
                 task.progress_stage = "pending"
-                task.progress_message = "服务重启后恢复等待队列"
+                task.progress_message = "??????"
                 task.progress_updated_at = datetime.now()
                 task.complete_time = None
                 task.cancel_requested = False
                 restored += 1
             elif task.status == TaskStatus.PENDING and not task.cancel_requested:
                 task.progress_stage = "pending"
-                task.progress_message = task.progress_message or "等待处理"
+                task.progress_message = task.progress_message or "????"
                 restored += 1
         if restored:
             self.save_tasks()
@@ -397,8 +406,6 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
         """
         退出插件
         """
-        if self._running:
-            self._event.set()
         if self._task_queue or self._consumer_thread or self._queue_worker:
             worker = self._get_queue_worker()
             worker_exited = worker.stop()
@@ -408,18 +415,7 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
             for task_id in list(self._tasks.keys()):
                 task = self._tasks[task_id]
                 if task.status == TaskStatus.IN_PROGRESS:
-                    if 'worker_exited' in locals() and worker_exited:
-                        task.status = TaskStatus.PENDING
-                        task.runtime_token = ""
-                        task.error_message = "服务停止中断，等待下次启动恢复"
-                        task.progress_stage = "pending"
-                        task.progress_message = "服务停止中断，等待下次启动恢复"
-                        task.progress_updated_at = datetime.now()
-                        task.complete_time = None
-                    else:
-                        task.error_message = "服务停止时任务线程仍在退出中，暂不自动恢复，避免重复执行"
-                        task.progress_message = task.error_message
-                        task.progress_updated_at = datetime.now()
+                    continue
                 elif task.status == TaskStatus.PENDING:
                     task.progress_stage = "pending"
                     task.progress_message = task.progress_message or "等待处理"
@@ -429,5 +425,4 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
             self._get_monitor_service().stop_observer()
             logger.info("目录监控已停止")
         self._running = False
-        self._event.clear()
         logger.info("自动字幕生成服务已停止")
