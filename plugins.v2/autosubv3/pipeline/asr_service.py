@@ -137,7 +137,7 @@ class AsrService:
             idx = 0
             last_pct = 0
             for segment in seg_list:
-                if self._event.is_set() or self._is_current_task_cancelled():
+                if self._is_current_task_cancelled():
                     self._logger.info(f"[Whisper音频提取文本] {video_name} - 用户中断，停止提取")
                     raise UserInterruptException("用户中断当前任务")
                 pct = int(segment.end / total_duration * 100) if total_duration > 0 else 0
@@ -203,11 +203,6 @@ class AsrService:
         copy_file: Callable[[Path, Path], None],
         skip_chinese=False,
     ):
-        tempdir = tempfile.gettempdir()
-        for file in os.listdir(tempdir):
-            if file.startswith('autosub-'):
-                os.remove(os.path.join(tempdir, file))
-
         with tempfile.NamedTemporaryFile(prefix='autosub-', suffix='.wav', delete=True) as audio_file:
             self._logger.info(f"[GenSub Step 5a] 提取音频：{audio_file.name}")
             ffmpeg_factory().extract_wav_from_video(video_file, audio_file.name, audio_index)
