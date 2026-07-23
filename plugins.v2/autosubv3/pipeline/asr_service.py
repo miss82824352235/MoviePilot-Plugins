@@ -55,24 +55,47 @@ class AsrService:
             os.environ["HF_HUB_CACHE"] = cache_dir
             if self._huggingface_proxy():
                 proxy = self._proxy_config()
-                os.environ["HTTP_PROXY"] = proxy['http']
-                os.environ["HTTPS_PROXY"] = proxy['https']
+                # settings.PROXY 可能为 None，或缺少 http/https；不能直接下标访问
+                if isinstance(proxy, dict) and proxy.get("http") and proxy.get("https"):
+                    os.environ["HTTP_PROXY"] = str(proxy["http"])
+                    os.environ["HTTPS_PROXY"] = str(proxy["https"])
+                else:
+                    self._logger.warn(
+                        f"[Whisper音频提取文本] {video_name} - 已开启 HuggingFace 代理，"
+                        "但系统 PROXY 未配置或无效，将直连加载模型"
+                    )
 
             max_retries = 3
             model = None
+            cpu_threads = psutil.cpu_count(logical=False) or psutil.cpu_count(logical=True) or 1
+            model_name = self._faster_whisper_model()
+            # 本地已有模型时优先离线加载，避免 PROXY=None / 代理失效时反复走 HuggingFace 下载失败
+            model_path = None
+            try:
+                model_path = download_model(model_name, local_files_only=True, cache_dir=cache_dir)
+                if model_path:
+                    self._logger.info(f"[Whisper音频提取文本] {video_name} - 使用本地缓存模型: {model_name}")
+            except Exception as local_err:
+                self._logger.info(
+                    f"[Whisper音频提取文本] {video_name} - 本地模型不可用，尝试在线下载: {local_err}"
+                )
+                model_path = None
+
             for attempt in range(max_retries):
                 try:
-                    model_path = download_model(self._faster_whisper_model(), local_files_only=False, cache_dir=cache_dir)
+                    if not model_path:
+                        model_path = download_model(model_name, local_files_only=False, cache_dir=cache_dir)
                     if model_path is None:
                         raise ValueError("模型下载返回空路径")
                     model = WhisperModel(
                         model_path,
                         device="cpu",
                         compute_type="int8",
-                        cpu_threads=psutil.cpu_count(logical=False),
+                        cpu_threads=cpu_threads,
                     )
                     break
                 except Exception as e:
+                    model_path = None
                     if attempt < max_retries - 1:
                         self._logger.warn(f"[Whisper音频提取文本] {video_name} - 模型下载失败（第{attempt+1}次），30秒后重试... 错误: {e}")
                         time.sleep(30)
@@ -206,9 +229,39 @@ class AsrService:
             return ret, lang, None
 
     @staticmethod
+    def _read_text_with_encoding(file_path) -> str:
+        """读取字幕文本，兼容 UTF-8 / GBK 等常见外挂字幕编码。"""
+        raw = Path(file_path).read_bytes()
+        if raw.startswith(b"\xef\xbb\xbf"):
+            return raw.decode("utf-8-sig")
+        candidates = (
+            "utf-8",
+            "utf-8-sig",
+            "gb18030",
+            "gbk",
+            "cp936",
+            "big5",
+            "cp949",
+            "euc-kr",
+            "shift_jis",
+            "cp932",
+            "latin-1",
+        )
+        last_error = None
+        for encoding in candidates:
+            try:
+                return raw.decode(encoding)
+            except UnicodeDecodeError as exc:
+                last_error = exc
+                continue
+        # 最后兜底：尽量读出内容，避免因编码直接整任务失败
+        if last_error is not None:
+            return raw.decode("utf-8", errors="replace")
+        return raw.decode("utf-8", errors="replace")
+
+    @staticmethod
     def load_srt(file_path):
-        with open(file_path, 'r', encoding="utf8") as f:
-            srt_text = f.read()
+        srt_text = AsrService._read_text_with_encoding(file_path)
         return list(srt.parse(srt_text))
 
     @staticmethod
