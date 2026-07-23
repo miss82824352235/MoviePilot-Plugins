@@ -31,6 +31,7 @@ class QueueWorker:
         self._set_current_task_callback = set_current_task
         self.task_queue = task_queue
         self.consumer_thread = consumer_thread
+        self._stop_after_current = False
 
     @property
     def current_task(self) -> Optional[TaskItem]:
@@ -56,6 +57,7 @@ class QueueWorker:
             self.consumer_thread = consumer_thread
 
     def start(self):
+        self._stop_after_current = False
         if not self.task_queue:
             self.task_queue = queue.Queue()
         if not self.consumer_thread or not self.consumer_thread.is_alive():
@@ -64,29 +66,15 @@ class QueueWorker:
         return self.task_queue, self.consumer_thread
 
     def stop(self, timeout: float = 10.0) -> bool:
-        """有限等待消费者线程退出，返回线程是否已经安全退出。"""
-        exited = True
+        """Stop accepting new work while allowing the current task to finish."""
+        self._stop_after_current = True
         if self.consumer_thread and self.consumer_thread.is_alive():
-            self._logger.info("正在停止当前任务...")
+            self._logger.info("?????????????...")
             self.consumer_thread.join(timeout=timeout)
             if self.consumer_thread.is_alive():
-                exited = False
-                self._logger.warning("[AutoSubv3] 消费线程在 %.1f 秒内未退出，插件将继续停服流程，但不会立即把处理中任务恢复入队", timeout)
-        if self.task_queue:
-            removed_count = 0
-            while not self.task_queue.empty():
-                try:
-                    self.task_queue.get_nowait()
-                    if getattr(self.task_queue, "unfinished_tasks", 0) > 0:
-                        self.task_queue.task_done()
-                    removed_count += 1
-                except queue.Empty:
-                    break
-                except ValueError as exc:
-                    self._logger.warning("[AutoSubv3] 清空队列时 task_done 账务异常：%s", exc)
-                    break
-            self._logger.info("任务队列已清空，移除待处理任务 %s 个", removed_count)
-        return exited
+                self._logger.info("[AutoSubv3] ???????????????????")
+                return False
+        return True
 
     def enqueue(self, task: TaskItem):
         if not self.task_queue:
@@ -150,12 +138,12 @@ class QueueWorker:
         return bool(task and (task.cancel_requested or task.status == TaskStatus.CANCELLED))
 
     def raise_if_task_cancelled(self):
-        if self._event.is_set() or self.is_current_task_cancelled():
-            raise UserInterruptException("用户中断当前任务")
+        if self.is_current_task_cancelled():
+            raise UserInterruptException("????????")
 
     def consume(self):
-        """消费任务队列，确保每次 get 后都恰好执行一次 task_done。"""
-        while not self._event.is_set():
+        """Consume queued tasks; a reload only prevents the next task from starting."""
+        while not self._stop_after_current:
             task = None
             try:
                 task = self.task_queue.get(timeout=1)
