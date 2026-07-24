@@ -78,12 +78,13 @@
   "SubtitleManualUploadMobile": {
     "name": "海拉鲁字幕大师魔改版",
     "description": "合并海拉鲁字幕大师上游移动端更新，保留真实媒体库路径扫描、移动端批量菜单与魔改交互。",
-    "version": "0.1.88-mod",
+    "version": "0.1.90-mod",
     "icon": "https://raw.githubusercontent.com/ifsherlock/MoviePilot-Plugins/main/icons/subtitle-match.png",
     "author": "ifsherlock/local-mod",
     "level": 1,
     "labels": "字幕,移动端,魔改版",
     "history": {
+      "v0.1.90-mod": "资源选择页改为固定上下栏：顶部搜索与底部分页始终可见，中间封面资源网格独立滚动；新增每页数量、范围统计、页码与首尾翻页。",
       "v0.1.88-mod": "合并上游海拉鲁字幕大师 0.1.82 移动端组件，保留真实媒体库路径扫描与魔改批量操作。"
     }
   }
