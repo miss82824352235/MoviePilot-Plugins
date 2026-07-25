@@ -42,7 +42,7 @@ class AsrService:
         self._max_segment_chars = max_segment_chars
         self._html_parser = html_parser
 
-    def do_speech_recognition(self, audio_lang, audio_file, video_file=None, skip_chinese=False):
+    def do_speech_recognition(self, audio_lang, audio_file, video_file=None, skip_chinese=False, model_name=None):
         lang = audio_lang
         video_name = os.path.basename(video_file) if video_file else os.path.basename(audio_file)
         self._logger.info(f"[Whisper音频提取文本] 开始处理: {video_name}")
@@ -68,7 +68,8 @@ class AsrService:
             max_retries = 3
             model = None
             cpu_threads = psutil.cpu_count(logical=False) or psutil.cpu_count(logical=True) or 1
-            model_name = self._faster_whisper_model()
+            model_name = model_name or self._faster_whisper_model()
+            self._logger.info(f"[Whisper音频提取文本] {video_name} - 最终模型: {model_name}")
             # 本地已有模型时优先离线加载，避免 PROXY=None / 代理失效时反复走 HuggingFace 下载失败
             model_path = None
             try:
@@ -202,6 +203,7 @@ class AsrService:
         ffmpeg_factory,
         copy_file: Callable[[Path, Path], None],
         skip_chinese=False,
+        asr_model: str = "",
     ):
         with tempfile.NamedTemporaryFile(prefix='autosub-', suffix='.wav', delete=True) as audio_file:
             self._logger.info(f"[GenSub Step 5a] 提取音频：{audio_file.name}")
@@ -210,7 +212,13 @@ class AsrService:
             self._logger.info("[GenSub Step 5b] 开始Whisper识别")
 
             self._logger.info(f"[GenSub Step 5] 开始Whisper识别, 语言 {audio_lang}")
-            ret, lang = self.do_speech_recognition(audio_lang, audio_file.name, video_file, skip_chinese=skip_chinese)
+            ret, lang = self.do_speech_recognition(
+                audio_lang,
+                audio_file.name,
+                video_file,
+                skip_chinese=skip_chinese,
+                model_name=asr_model,
+            )
             if ret == "skip_chinese":
                 return ret, lang, None
             if ret:

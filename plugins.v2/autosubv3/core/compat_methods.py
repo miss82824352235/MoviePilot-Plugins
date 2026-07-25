@@ -499,17 +499,17 @@ class AutoSubv3CompatMixin:
             logger.info(f"字幕源偏好：{self._translate_preference} 获取音轨元数据失败")
             return False, None, None
 
-        # 如果开启了自动语言检测，直接设置为auto，跳过metadata的语言信息
+        audio_metadata_lang = self._AutoSubv3__normalize_iso_lang(audio_lang, default="")
+        # 自动检测只影响 Whisper 的转写语言参数；模型策略仍以选中主音轨元数据为准。
         if self._auto_detect_language:
             logger.info("已开启自动语言检测，将使用whisper模型自动识别语言")
             audio_lang = 'auto'
         else:
-            normalized_audio_lang = self._AutoSubv3__normalize_iso_lang(audio_lang, default="")
-            if not normalized_audio_lang:
+            if not audio_metadata_lang:
                 logger.info(f"字幕源偏好：{self._translate_preference} 未从音轨元数据中获取到语言信息")
                 audio_lang = 'auto'
             else:
-                audio_lang = normalized_audio_lang
+                audio_lang = audio_metadata_lang
 
         # 当字幕源偏好为origin_first时，优先使用音轨语言
         if self._translate_preference == "origin_first":
@@ -606,6 +606,32 @@ class AutoSubv3CompatMixin:
             logger.info("已指定音轨 ASR，但 ASR 依赖或 Whisper 配置不可用")
             return False, None, None
 
+        task = getattr(self, "_current_processing_task", None)
+        asr_model = self._faster_whisper_model or "base"
+        if task:
+            strategy = task.asr_model_strategy or self._asr_model_strategy or "auto_english_fast"
+            if not task.asr_model:
+                if strategy == "manual":
+                    task.asr_model = asr_model
+                    task.asr_model_reason = "手动指定模型"
+                elif audio_metadata_lang == "en":
+                    task.asr_model = "distil-large-v3"
+                    task.asr_model_reason = "主音轨元数据为英语，自动选择英语快速模型"
+                else:
+                    task.asr_model = "deepdml/faster-whisper-large-v3-turbo-ct2"
+                    task.asr_model_reason = "主音轨为非英语或语言未知，自动选择多语快速模型"
+            task.asr_audio_language = audio_metadata_lang or "unknown"
+            task.asr_model_strategy = strategy
+            asr_model = task.asr_model
+            self._update_current_task_progress(34, "asr_model", f"已选择 Whisper 模型：{asr_model}", save=True)
+            logger.info(
+                "[AutoSubv3] ASR 模型已锁定 model=%s strategy=%s audio_metadata_lang=%s reason=%s",
+                asr_model,
+                strategy,
+                task.asr_audio_language,
+                task.asr_model_reason,
+            )
+
         ret, lang, output = self._get_asr_service().generate_from_audio(
             video_file,
             subtitle_file,
@@ -614,6 +640,7 @@ class AutoSubv3CompatMixin:
             Ffmpeg,
             SystemUtils.copy,
             skip_chinese=bool(self._skip_chinese),
+            asr_model=asr_model,
         )
         if ret == "skip_chinese":
             logger.info(f"视频识别为中文且已开启中文视频不翻译，跳过字幕生成：{video_file}")

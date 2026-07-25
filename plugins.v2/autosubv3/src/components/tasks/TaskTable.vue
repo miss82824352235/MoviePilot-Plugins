@@ -121,6 +121,8 @@ function showProgress(task) {
         <div class="task-meta">
           <span>{{ task.source_label || task.source }}</span>
           <span v-if="sourceText(task)">{{ sourceText(task) }}</span>
+          <span v-if="task.asr_model">模型：{{ task.asr_model }}</span>
+          <span v-if="task.asr_model_reason">{{ task.asr_model_reason }}</span>
           <span v-if="task.output_name">输出：{{ task.output_name }}</span>
           <span>{{ task.add_time || '-' }}</span>
           <span>{{ task.complete_time || '-' }}</span>

@@ -74,6 +74,10 @@ class TaskService:
             "source_asset_path": task.source_asset_path or "",
             "source_asset_name": os.path.basename(task.source_asset_path or ""),
             "source_lang": task.source_lang or task.source_subtitle_lang or "",
+            "asr_model": task.asr_model or "",
+            "asr_model_reason": task.asr_model_reason or "",
+            "asr_audio_language": task.asr_audio_language or "",
+            "asr_model_strategy": task.asr_model_strategy or "",
             "output_path": task.output_path or "",
             "output_name": os.path.basename(task.output_path or ""),
             "output_variant": task.output_variant or "",
@@ -488,8 +492,12 @@ class TaskService:
             output_variant=self._plugin._normalize_text(output_variant),
             reuse_output_path=self._plugin._normalize_text(reuse_output_path),
             reuse_source_lang=self._plugin._normalize_text(reuse_source_lang),
+            asr_model_strategy=(self._plugin._asr_model_strategy or "auto_english_fast"),
             add_time=datetime.now()
         )
+        if task.asr_model_strategy == "manual":
+            task.asr_model = self._plugin._faster_whisper_model or "base"
+            task.asr_model_reason = "手动指定模型"
         if source_subtitle_path:
             try:
                 task.source_asset_path = self._plugin._copy_source_asset(task.task_id, source_subtitle_path, source_name)

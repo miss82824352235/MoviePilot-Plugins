@@ -52,6 +52,10 @@ class TaskStore:
                     progress_updated_at=datetime.fromisoformat(task_dict["progress_updated_at"])
                     if task_dict.get("progress_updated_at") else None,
                     runtime_token=task_dict.get("runtime_token", ""),
+                    asr_model=task_dict.get("asr_model", ""),
+                    asr_model_reason=task_dict.get("asr_model_reason", ""),
+                    asr_audio_language=task_dict.get("asr_audio_language", ""),
+                    asr_model_strategy=task_dict.get("asr_model_strategy", ""),
                 )
                 tasks[task_id] = task
             except Exception as exc:
@@ -88,6 +92,10 @@ class TaskStore:
             "progress_message": task.progress_message or "",
             "progress_updated_at": task.progress_updated_at.isoformat() if task.progress_updated_at else None,
             "runtime_token": task.runtime_token or "",
+            "asr_model": task.asr_model or "",
+            "asr_model_reason": task.asr_model_reason or "",
+            "asr_audio_language": task.asr_audio_language or "",
+            "asr_model_strategy": task.asr_model_strategy or "",
         }
 
     def save_tasks(self, tasks: Dict[str, TaskItem]):

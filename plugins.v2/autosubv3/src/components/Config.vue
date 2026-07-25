@@ -33,6 +33,7 @@ const defaultConfig = {
   translate_zh: true,
   enable_asr: true,
   auto_detect_language: false,
+  asr_model_strategy: 'auto_english_fast',
   skip_chinese: false,
   max_segment_duration: 8,
   max_segment_chars: 50,
@@ -97,12 +98,17 @@ const whisperModels = [
   { title: 'base', value: 'base' },
   { title: 'small', value: 'small' },
   { title: 'medium', value: 'medium' },
+  { title: 'distil-large-v3', value: 'distil-large-v3' },
   { title: 'large-v3', value: 'large-v3' },
   { title: 'large-v3-turbo', value: 'deepdml/faster-whisper-large-v3-turbo-ct2' },
 ]
 const outputModes = [
   { title: '双语字幕（翻译+原文）', value: 'bilingual' },
   { title: '纯中文字幕', value: 'chinese_only' },
+]
+const asrModelStrategies = [
+  { title: '自动：英语快速、非英语多语（推荐）', value: 'auto_english_fast' },
+  { title: '手动指定模型', value: 'manual' },
 ]
 const preferences = [
   { title: '仅英文', value: 'english_only' },
@@ -516,10 +522,19 @@ function save() {
         <VRow>
           <VCol cols="12" md="6">
             <VSelect
+              v-model="config.asr_model_strategy"
+              :items="asrModelStrategies"
+              label="Whisper 模型策略"
+              hint="自动策略按选中的主音轨元数据决定，不扫描整片，也不会因少量混杂对白切换模型"
+              persistent-hint
+            />
+          </VCol>
+          <VCol cols="12" md="6">
+            <VSelect
               v-model="config.faster_whisper_model"
               :items="whisperModels"
-              label="Whisper 模型"
-              hint="模型越大效果越好，耗时越久"
+              :label="config.asr_model_strategy === 'manual' ? '手动 Whisper 模型' : '手动模式模型'"
+              :hint="config.asr_model_strategy === 'manual' ? '仅在手动策略下使用' : '切换到手动策略后生效'"
               persistent-hint
             />
           </VCol>

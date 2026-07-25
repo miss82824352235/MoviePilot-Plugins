@@ -92,3 +92,7 @@ class TaskItem:
     progress_message: str = "等待处理"
     progress_updated_at: datetime = None
     runtime_token: str = ""
+    asr_model: str = ""
+    asr_model_reason: str = ""
+    asr_audio_language: str = ""
+    asr_model_strategy: str = ""

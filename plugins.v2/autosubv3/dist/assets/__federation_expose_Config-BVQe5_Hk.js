@@ -53,6 +53,7 @@ const defaultConfig = {
   translate_zh: true,
   enable_asr: true,
   auto_detect_language: false,
+  asr_model_strategy: 'auto_english_fast',
   skip_chinese: false,
   max_segment_duration: 8,
   max_segment_chars: 50,
@@ -116,12 +117,17 @@ const whisperModels = [
   { title: 'base', value: 'base' },
   { title: 'small', value: 'small' },
   { title: 'medium', value: 'medium' },
+  { title: 'distil-large-v3', value: 'distil-large-v3' },
   { title: 'large-v3', value: 'large-v3' },
   { title: 'large-v3-turbo', value: 'deepdml/faster-whisper-large-v3-turbo-ct2' },
 ];
 const outputModes = [
   { title: '双语字幕（翻译+原文）', value: 'bilingual' },
   { title: '纯中文字幕', value: 'chinese_only' },
+];
+const asrModelStrategies = [
+  { title: '自动：英语快速、非英语多语（推荐）', value: 'auto_english_fast' },
+  { title: '手动指定模型', value: 'manual' },
 ];
 const preferences = [
   { title: '仅英文', value: 'english_only' },
@@ -350,14 +356,14 @@ return (_ctx, _cache) => {
       color: "transparent"
     }, {
       default: _withCtx(() => [
-        _cache[38] || (_cache[38] = _createElementVNode("div", { class: "text-h6 ms-3" }, "AI字幕生成配置", -1)),
+        _cache[39] || (_cache[39] = _createElementVNode("div", { class: "text-h6 ms-3" }, "AI字幕生成配置", -1)),
         _createVNode(_component_VSpacer),
         _createVNode(_component_VBtn, {
           variant: "text",
           "prepend-icon": "mdi-format-list-bulleted",
           onClick: _cache[0] || (_cache[0] = $event => (emit('switch')))
         }, {
-          default: _withCtx(() => [...(_cache[36] || (_cache[36] = [
+          default: _withCtx(() => [...(_cache[37] || (_cache[37] = [
             _createTextVNode("查看任务", -1)
           ]))]),
           _: 1
@@ -369,7 +375,7 @@ return (_ctx, _cache) => {
           loading: saving.value,
           onClick: save
         }, {
-          default: _withCtx(() => [...(_cache[37] || (_cache[37] = [
+          default: _withCtx(() => [...(_cache[38] || (_cache[38] = [
             _createTextVNode("保存", -1)
           ]))]),
           _: 1
@@ -395,7 +401,7 @@ return (_ctx, _cache) => {
           }, null, 8, ["text"]))
         : _createCommentVNode("", true),
       _createElementVNode("section", _hoisted_3, [
-        _cache[39] || (_cache[39] = _createElementVNode("div", { class: "section-title" }, "基础设置", -1)),
+        _cache[40] || (_cache[40] = _createElementVNode("div", { class: "section-title" }, "基础设置", -1)),
         _createVNode(_component_VRow, null, {
           default: _withCtx(() => [
             _createVNode(_component_VCol, {
@@ -539,14 +545,14 @@ return (_ctx, _cache) => {
         })
       ]),
       _createElementVNode("section", _hoisted_4, [
-        _cache[45] || (_cache[45] = _createElementVNode("div", { class: "section-title" }, "独立 LLM 配置", -1)),
+        _cache[46] || (_cache[46] = _createElementVNode("div", { class: "section-title" }, "独立 LLM 配置", -1)),
         _createVNode(_component_VAlert, {
           type: "info",
           variant: "tonal",
           class: "mb-3",
           density: "comfortable"
         }, {
-          default: _withCtx(() => [...(_cache[40] || (_cache[40] = [
+          default: _withCtx(() => [...(_cache[41] || (_cache[41] = [
             _createTextVNode(" AutoSubv3 使用独立 LLM 参数；这里只复刻 MoviePilot 智能助手的 Provider 目录、Base URL 预设、模型列表和 metadata 机制，不读取也不绑定 MP 智能助手当前填写值。 ", -1)
           ]))]),
           _: 1
@@ -679,7 +685,7 @@ return (_ctx, _cache) => {
                   disabled: loadingModels.value || testingModel.value || loadingMetadata.value || !apiReady.value,
                   onClick: fetchProviders
                 }, {
-                  default: _withCtx(() => [...(_cache[41] || (_cache[41] = [
+                  default: _withCtx(() => [...(_cache[42] || (_cache[42] = [
                     _createTextVNode(" 获取Provider ", -1)
                   ]))]),
                   _: 1
@@ -692,7 +698,7 @@ return (_ctx, _cache) => {
                   disabled: testingModel.value || loadingProviders.value || loadingMetadata.value || !apiReady.value,
                   onClick: fetchModels
                 }, {
-                  default: _withCtx(() => [...(_cache[42] || (_cache[42] = [
+                  default: _withCtx(() => [...(_cache[43] || (_cache[43] = [
                     _createTextVNode(" 获取模型 ", -1)
                   ]))]),
                   _: 1
@@ -705,7 +711,7 @@ return (_ctx, _cache) => {
                   disabled: loadingModels.value || loadingProviders.value || testingModel.value || !apiReady.value,
                   onClick: fetchMetadata
                 }, {
-                  default: _withCtx(() => [...(_cache[43] || (_cache[43] = [
+                  default: _withCtx(() => [...(_cache[44] || (_cache[44] = [
                     _createTextVNode(" 模型能力 ", -1)
                   ]))]),
                   _: 1
@@ -718,7 +724,7 @@ return (_ctx, _cache) => {
                   disabled: loadingModels.value || loadingProviders.value || loadingMetadata.value || !apiReady.value,
                   onClick: testModel
                 }, {
-                  default: _withCtx(() => [...(_cache[44] || (_cache[44] = [
+                  default: _withCtx(() => [...(_cache[45] || (_cache[45] = [
                     _createTextVNode(" 测试模型 ", -1)
                   ]))]),
                   _: 1
@@ -782,7 +788,7 @@ return (_ctx, _cache) => {
         })
       ]),
       _createElementVNode("section", _hoisted_5, [
-        _cache[46] || (_cache[46] = _createElementVNode("div", { class: "section-title" }, "翻译参数", -1)),
+        _cache[47] || (_cache[47] = _createElementVNode("div", { class: "section-title" }, "翻译参数", -1)),
         _createVNode(_component_VRow, null, {
           default: _withCtx(() => [
             _createVNode(_component_VCol, {
@@ -865,7 +871,7 @@ return (_ctx, _cache) => {
         })
       ]),
       _createElementVNode("section", _hoisted_6, [
-        _cache[47] || (_cache[47] = _createElementVNode("div", { class: "section-title" }, "Whisper 与输出", -1)),
+        _cache[48] || (_cache[48] = _createElementVNode("div", { class: "section-title" }, "Whisper 与输出", -1)),
         _createVNode(_component_VRow, null, {
           default: _withCtx(() => [
             _createVNode(_component_VCol, {
@@ -874,11 +880,11 @@ return (_ctx, _cache) => {
             }, {
               default: _withCtx(() => [
                 _createVNode(_component_VSelect, {
-                  modelValue: config.faster_whisper_model,
-                  "onUpdate:modelValue": _cache[24] || (_cache[24] = $event => ((config.faster_whisper_model) = $event)),
-                  items: whisperModels,
-                  label: "Whisper 模型",
-                  hint: "模型越大效果越好，耗时越久",
+                  modelValue: config.asr_model_strategy,
+                  "onUpdate:modelValue": _cache[24] || (_cache[24] = $event => ((config.asr_model_strategy) = $event)),
+                  items: asrModelStrategies,
+                  label: "Whisper 模型策略",
+                  hint: "自动策略按选中的主音轨元数据决定，不扫描整片，也不会因少量混杂对白切换模型",
                   "persistent-hint": ""
                 }, null, 8, ["modelValue"])
               ]),
@@ -890,8 +896,24 @@ return (_ctx, _cache) => {
             }, {
               default: _withCtx(() => [
                 _createVNode(_component_VSelect, {
+                  modelValue: config.faster_whisper_model,
+                  "onUpdate:modelValue": _cache[25] || (_cache[25] = $event => ((config.faster_whisper_model) = $event)),
+                  items: whisperModels,
+                  label: config.asr_model_strategy === 'manual' ? '手动 Whisper 模型' : '手动模式模型',
+                  hint: config.asr_model_strategy === 'manual' ? '仅在手动策略下使用' : '切换到手动策略后生效',
+                  "persistent-hint": ""
+                }, null, 8, ["modelValue", "label", "hint"])
+              ]),
+              _: 1
+            }),
+            _createVNode(_component_VCol, {
+              cols: "12",
+              md: "6"
+            }, {
+              default: _withCtx(() => [
+                _createVNode(_component_VSelect, {
                   modelValue: config.subtitle_output_mode,
-                  "onUpdate:modelValue": _cache[25] || (_cache[25] = $event => ((config.subtitle_output_mode) = $event)),
+                  "onUpdate:modelValue": _cache[26] || (_cache[26] = $event => ((config.subtitle_output_mode) = $event)),
                   items: outputModes,
                   label: "字幕输出模式"
                 }, null, 8, ["modelValue"])
@@ -910,7 +932,7 @@ return (_ctx, _cache) => {
               default: _withCtx(() => [
                 _createVNode(_component_VTextField, {
                   modelValue: config.max_segment_duration,
-                  "onUpdate:modelValue": _cache[26] || (_cache[26] = $event => ((config.max_segment_duration) = $event)),
+                  "onUpdate:modelValue": _cache[27] || (_cache[27] = $event => ((config.max_segment_duration) = $event)),
                   label: "每段字幕最大时长（秒）",
                   placeholder: "8"
                 }, null, 8, ["modelValue"])
@@ -924,7 +946,7 @@ return (_ctx, _cache) => {
               default: _withCtx(() => [
                 _createVNode(_component_VTextField, {
                   modelValue: config.max_segment_chars,
-                  "onUpdate:modelValue": _cache[27] || (_cache[27] = $event => ((config.max_segment_chars) = $event)),
+                  "onUpdate:modelValue": _cache[28] || (_cache[28] = $event => ((config.max_segment_chars) = $event)),
                   label: "每段字幕最大字符数",
                   placeholder: "50"
                 }, null, 8, ["modelValue"])
@@ -938,7 +960,7 @@ return (_ctx, _cache) => {
               default: _withCtx(() => [
                 _createVNode(_component_VTextField, {
                   modelValue: config.file_size,
-                  "onUpdate:modelValue": _cache[28] || (_cache[28] = $event => ((config.file_size) = $event)),
+                  "onUpdate:modelValue": _cache[29] || (_cache[29] = $event => ((config.file_size) = $event)),
                   label: "文件最小大小（MB）",
                   placeholder: "10"
                 }, null, 8, ["modelValue"])
@@ -957,7 +979,7 @@ return (_ctx, _cache) => {
               default: _withCtx(() => [
                 _createVNode(_component_VSelect, {
                   modelValue: config.translate_preference,
-                  "onUpdate:modelValue": _cache[29] || (_cache[29] = $event => ((config.translate_preference) = $event)),
+                  "onUpdate:modelValue": _cache[30] || (_cache[30] = $event => ((config.translate_preference) = $event)),
                   items: preferences,
                   label: "字幕源语言偏好"
                 }, null, 8, ["modelValue"])
@@ -971,7 +993,7 @@ return (_ctx, _cache) => {
               default: _withCtx(() => [
                 _createVNode(_component_VSwitch, {
                   modelValue: config.auto_detect_language,
-                  "onUpdate:modelValue": _cache[30] || (_cache[30] = $event => ((config.auto_detect_language) = $event)),
+                  "onUpdate:modelValue": _cache[31] || (_cache[31] = $event => ((config.auto_detect_language) = $event)),
                   label: "自动检测语言",
                   "hide-details": ""
                 }, null, 8, ["modelValue"])
@@ -985,7 +1007,7 @@ return (_ctx, _cache) => {
               default: _withCtx(() => [
                 _createVNode(_component_VSwitch, {
                   modelValue: config.proxy,
-                  "onUpdate:modelValue": _cache[31] || (_cache[31] = $event => ((config.proxy) = $event)),
+                  "onUpdate:modelValue": _cache[32] || (_cache[32] = $event => ((config.proxy) = $event)),
                   label: "使用代理下载模型",
                   "hide-details": ""
                 }, null, 8, ["modelValue"])
@@ -997,14 +1019,14 @@ return (_ctx, _cache) => {
         })
       ]),
       _createElementVNode("section", _hoisted_7, [
-        _cache[48] || (_cache[48] = _createElementVNode("div", { class: "section-title" }, "路径", -1)),
+        _cache[49] || (_cache[49] = _createElementVNode("div", { class: "section-title" }, "路径", -1)),
         _createVNode(_component_VRow, null, {
           default: _withCtx(() => [
             _createVNode(_component_VCol, { cols: "12" }, {
               default: _withCtx(() => [
                 _createVNode(_component_VTextarea, {
                   modelValue: config.path_whitelist,
-                  "onUpdate:modelValue": _cache[32] || (_cache[32] = $event => ((config.path_whitelist) = $event)),
+                  "onUpdate:modelValue": _cache[33] || (_cache[33] = $event => ((config.path_whitelist) = $event)),
                   label: "监控路径（每行一个）",
                   rows: 3,
                   placeholder: "/mnt/media/movies\n/downloads",
@@ -1018,7 +1040,7 @@ return (_ctx, _cache) => {
               default: _withCtx(() => [
                 _createVNode(_component_VTextarea, {
                   modelValue: config.path_list,
-                  "onUpdate:modelValue": _cache[33] || (_cache[33] = $event => ((config.path_list) = $event)),
+                  "onUpdate:modelValue": _cache[34] || (_cache[34] = $event => ((config.path_list) = $event)),
                   label: "媒体路径（手动执行时使用）",
                   rows: 3,
                   placeholder: "绝对路径，每行一个，支持文件和文件夹"
@@ -1034,9 +1056,9 @@ return (_ctx, _cache) => {
         _createVNode(_component_VBtn, {
           variant: "text",
           "prepend-icon": "mdi-format-list-bulleted",
-          onClick: _cache[34] || (_cache[34] = $event => (emit('switch')))
+          onClick: _cache[35] || (_cache[35] = $event => (emit('switch')))
         }, {
-          default: _withCtx(() => [...(_cache[49] || (_cache[49] = [
+          default: _withCtx(() => [...(_cache[50] || (_cache[50] = [
             _createTextVNode("查看任务", -1)
           ]))]),
           _: 1
@@ -1044,9 +1066,9 @@ return (_ctx, _cache) => {
         _createVNode(_component_VSpacer),
         _createVNode(_component_VBtn, {
           variant: "text",
-          onClick: _cache[35] || (_cache[35] = $event => (emit('close')))
+          onClick: _cache[36] || (_cache[36] = $event => (emit('close')))
         }, {
-          default: _withCtx(() => [...(_cache[50] || (_cache[50] = [
+          default: _withCtx(() => [...(_cache[51] || (_cache[51] = [
             _createTextVNode("关闭", -1)
           ]))]),
           _: 1
@@ -1057,7 +1079,7 @@ return (_ctx, _cache) => {
           loading: saving.value,
           onClick: save
         }, {
-          default: _withCtx(() => [...(_cache[51] || (_cache[51] = [
+          default: _withCtx(() => [...(_cache[52] || (_cache[52] = [
             _createTextVNode("保存", -1)
           ]))]),
           _: 1
@@ -1069,6 +1091,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-6258526c"]]);
+const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-5162b9a6"]]);
 
 export { Config as default };

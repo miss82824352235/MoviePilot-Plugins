@@ -164,6 +164,24 @@ def build_config_form() -> Tuple[List[dict], Dict[str, Any]]:
                                 {
                                     "component": "VSelect",
                                     "props": {
+                                        "model": "asr_model_strategy",
+                                        "label": "Whisper 模型策略",
+                                        "hint": "自动策略按选中主音轨元数据决定；不会扫描整片或因少量混杂对白切换模型",
+                                        "items": [
+                                            {"title": "自动：英语快速、非英语多语（推荐）", "value": "auto_english_fast"},
+                                            {"title": "手动指定模型", "value": "manual"},
+                                        ],
+                                    },
+                                }
+                            ],
+                        },
+                        {
+                            "component": "VCol",
+                            "props": {"cols": 12, "md": 6},
+                            "content": [
+                                {
+                                    "component": "VSelect",
+                                    "props": {
                                         "model": "faster_whisper_model",
                                         "label": "Whisper 模型",
                                         "hint": "模型越大效果越好，耗时越久",
@@ -172,6 +190,7 @@ def build_config_form() -> Tuple[List[dict], Dict[str, Any]]:
                                             {"title": "base", "value": "base"},
                                             {"title": "small", "value": "small"},
                                             {"title": "medium", "value": "medium"},
+                                            {"title": "distil-large-v3", "value": "distil-large-v3"},
                                             {"title": "large-v3", "value": "large-v3"},
                                             {"title": "large-v3-turbo", "value": "deepdml/faster-whisper-large-v3-turbo-ct2"},
                                         ],
@@ -349,6 +368,7 @@ def build_config_form() -> Tuple[List[dict], Dict[str, Any]]:
         "translate_zh": True,
         "enable_asr": True,
         "auto_detect_language": False,
+        "asr_model_strategy": "auto_english_fast",
         "skip_chinese": False,
         "max_segment_duration": 8.0,
         "max_segment_chars": 50,

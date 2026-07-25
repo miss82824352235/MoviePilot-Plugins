@@ -62,7 +62,7 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
     # 主题色
     plugin_color = "#2C4F7E"
     # 插件版本
-    plugin_version = "3.5.83"
+    plugin_version = "3.5.84"
     # 插件作者
     plugin_author = "ifsherlock"
     # 作者主页
@@ -103,6 +103,7 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
     _huggingface_proxy = None
     _faster_whisper_model_path = None
     _faster_whisper_model = None
+    _asr_model_strategy = None
     _max_segment_duration = None
     _max_segment_chars = None
     _process_new_only = None
@@ -157,6 +158,7 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
         self._translate_preference = config.get('translate_preference', 'english_first')
         self._enable_asr = config.get('enable_asr', True)
         self._faster_whisper_model = config.get('faster_whisper_model', 'base')
+        self._asr_model_strategy = config.get('asr_model_strategy', 'auto_english_fast')
         self._faster_whisper_model_path = config.get('faster_whisper_model_path',
                                                      self.get_data_path() / "faster-whisper-models")
         self._huggingface_proxy = config.get('proxy', True)

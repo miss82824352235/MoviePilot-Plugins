@@ -1,7 +1,7 @@
 import { importShared } from './__federation_fn_import-JrT3xvdd.js';
 import { _ as _export_sfc } from './_plugin-vue_export-helper-pcqpp-6-.js';
 
-const {computed: computed$2,ref} = await importShared('vue');
+const {computed: computed$2,ref: ref$1} = await importShared('vue');
 
 
 function resolveValue(source) {
@@ -34,19 +34,19 @@ function canDeleteTask(task) {
 }
 
 function useAutoSubTasks({ api, pluginBase, confirmDelete = window.confirm } = {}) {
-  const loading = ref(false);
-  const operating = ref(false);
-  const operation = ref('');
-  const sortOrder = ref('desc');
-  const statusFilter = ref('all');
-  const selectedTaskIds = ref([]);
-  const error = ref('');
-  const message = ref('');
-  const status = ref({});
-  const tasks = ref([]);
-  const restartDialog = ref(false);
-  const restartTargets = ref([]);
-  const restartSourcePolicy = ref('reuse');
+  const loading = ref$1(false);
+  const operating = ref$1(false);
+  const operation = ref$1('');
+  const sortOrder = ref$1('desc');
+  const statusFilter = ref$1('all');
+  const selectedTaskIds = ref$1([]);
+  const error = ref$1('');
+  const message = ref$1('');
+  const status = ref$1({});
+  const tasks = ref$1([]);
+  const restartDialog = ref$1(false);
+  const restartTargets = ref$1([]);
+  const restartSourcePolicy = ref$1('reuse');
   const restartSourceOptions = [
     { title: '沿用原任务来源', value: 'reuse' },
     { title: '自动选择', value: 'auto' },
@@ -255,6 +255,196 @@ function useAutoSubTasks({ api, pluginBase, confirmDelete = window.confirm } = {
   }
 }
 
+const {resolveComponent:_resolveComponent$5,createVNode:_createVNode$4,toDisplayString:_toDisplayString$3,createTextVNode:_createTextVNode$4,withCtx:_withCtx$4,createElementVNode:_createElementVNode$3,openBlock:_openBlock$5,createElementBlock:_createElementBlock$3,createCommentVNode:_createCommentVNode$2,createBlock:_createBlock$4} = await importShared('vue');
+
+
+const _hoisted_1$4 = { class: "text-body-2 mb-2" };
+const _hoisted_2$2 = {
+  key: 0,
+  class: "text-caption text-medium-emphasis"
+};
+const _hoisted_3$1 = {
+  key: 0,
+  class: "mx-2"
+};
+const _hoisted_4$1 = { key: 1 };
+const _hoisted_5$1 = {
+  key: 1,
+  class: "text-caption text-medium-emphasis"
+};
+
+const {onMounted: onMounted$1,ref} = await importShared('vue');
+
+
+
+const _sfc_main$5 = {
+  __name: 'RuntimeUpdateCard',
+  props: {
+  api: { type: Object, default: () => ({}) },
+  pluginBase: { type: Object, required: true },
+},
+  setup(__props) {
+
+const props = __props;
+
+const loading = ref(false);
+const requesting = ref(false);
+const error = ref('');
+const notice = ref('');
+const status = ref({});
+
+function unwrap(response) {
+  return response?.data?.data || response?.data || {}
+}
+
+function errorMessage(error, fallback) {
+  return error?.response?.data?.detail || error?.message || fallback
+}
+
+async function loadStatus() {
+  loading.value = true;
+  error.value = '';
+  try {
+    status.value = unwrap(await props.api.get(`${props.pluginBase}/runtime_update/status`));
+  } catch (caught) {
+    error.value = errorMessage(caught, '读取运行库更新状态失败');
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function requestCheck() {
+  if (requesting.value || !status.value.installed) return
+  requesting.value = true;
+  error.value = '';
+  notice.value = '';
+  try {
+    const result = unwrap(await props.api.post(`${props.pluginBase}/runtime_update/check`, {}));
+    notice.value = result.message || '已请求检查更新';
+    await loadStatus();
+  } catch (caught) {
+    error.value = errorMessage(caught, '请求运行库检查失败');
+  } finally {
+    requesting.value = false;
+  }
+}
+
+onMounted$1(loadStatus);
+
+return (_ctx, _cache) => {
+  const _component_VIcon = _resolveComponent$5("VIcon");
+  const _component_VSpacer = _resolveComponent$5("VSpacer");
+  const _component_VChip = _resolveComponent$5("VChip");
+  const _component_VCardTitle = _resolveComponent$5("VCardTitle");
+  const _component_VAlert = _resolveComponent$5("VAlert");
+  const _component_VCardText = _resolveComponent$5("VCardText");
+  const _component_VBtn = _resolveComponent$5("VBtn");
+  const _component_VCardActions = _resolveComponent$5("VCardActions");
+  const _component_VCard = _resolveComponent$5("VCard");
+
+  return (_openBlock$5(), _createBlock$4(_component_VCard, {
+    class: "mb-4",
+    variant: "tonal"
+  }, {
+    default: _withCtx$4(() => [
+      _createVNode$4(_component_VCardTitle, { class: "d-flex align-center text-subtitle-1 py-3" }, {
+        default: _withCtx$4(() => [
+          _createVNode$4(_component_VIcon, {
+            class: "mr-2",
+            icon: "mdi-update"
+          }),
+          _cache[0] || (_cache[0] = _createTextVNode$4(" Whisper 运行库维护 ", -1)),
+          _createVNode$4(_component_VSpacer),
+          _createVNode$4(_component_VChip, {
+            color: status.value.installed ? 'success' : 'warning',
+            size: "small",
+            variant: "flat"
+          }, {
+            default: _withCtx$4(() => [
+              _createTextVNode$4(_toDisplayString$3(status.value.installed ? '已安装' : '未安装'), 1)
+            ]),
+            _: 1
+          }, 8, ["color"])
+        ]),
+        _: 1
+      }),
+      _createVNode$4(_component_VCardText, { class: "pt-0" }, {
+        default: _withCtx$4(() => [
+          _createElementVNode$3("div", _hoisted_1$4, _toDisplayString$3(status.value.message || '正在读取宿主机更新器状态…'), 1),
+          (status.value.installed)
+            ? (_openBlock$5(), _createElementBlock$3("div", _hoisted_2$2, [
+                _createTextVNode$4(" faster-whisper：" + _toDisplayString$3(status.value.faster_whisper_version || '未知') + " ", 1),
+                _cache[1] || (_cache[1] = _createElementVNode$3("span", { class: "mx-2" }, "·", -1)),
+                _createTextVNode$4(" CTranslate2：" + _toDisplayString$3(status.value.ctranslate2_version || '未知') + " ", 1),
+                (status.value.checked_at)
+                  ? (_openBlock$5(), _createElementBlock$3("span", _hoisted_3$1, "·"))
+                  : _createCommentVNode$2("", true),
+                (status.value.checked_at)
+                  ? (_openBlock$5(), _createElementBlock$3("span", _hoisted_4$1, "上次检查：" + _toDisplayString$3(status.value.checked_at), 1))
+                  : _createCommentVNode$2("", true)
+              ]))
+            : (_openBlock$5(), _createElementBlock$3("div", _hoisted_5$1, _toDisplayString$3(status.value.install_hint), 1)),
+          (error.value)
+            ? (_openBlock$5(), _createBlock$4(_component_VAlert, {
+                key: 2,
+                class: "mt-3",
+                density: "compact",
+                type: "error",
+                variant: "tonal",
+                text: error.value
+              }, null, 8, ["text"]))
+            : _createCommentVNode$2("", true),
+          (notice.value)
+            ? (_openBlock$5(), _createBlock$4(_component_VAlert, {
+                key: 3,
+                class: "mt-3",
+                density: "compact",
+                type: "success",
+                variant: "tonal",
+                text: notice.value
+              }, null, 8, ["text"]))
+            : _createCommentVNode$2("", true)
+        ]),
+        _: 1
+      }),
+      _createVNode$4(_component_VCardActions, { class: "pt-0 px-4 pb-3" }, {
+        default: _withCtx$4(() => [
+          _createVNode$4(_component_VBtn, {
+            loading: loading.value,
+            size: "small",
+            variant: "text",
+            onClick: loadStatus
+          }, {
+            default: _withCtx$4(() => [...(_cache[2] || (_cache[2] = [
+              _createTextVNode$4("刷新状态", -1)
+            ]))]),
+            _: 1
+          }, 8, ["loading"]),
+          _createVNode$4(_component_VBtn, {
+            disabled: !status.value.installed,
+            loading: requesting.value,
+            color: "primary",
+            size: "small",
+            variant: "flat",
+            onClick: requestCheck
+          }, {
+            default: _withCtx$4(() => [...(_cache[3] || (_cache[3] = [
+              _createTextVNode$4(" 手动检查更新 ", -1)
+            ]))]),
+            _: 1
+          }, 8, ["disabled", "loading"]),
+          _cache[4] || (_cache[4] = _createElementVNode$3("span", { class: "text-caption text-medium-emphasis ml-2" }, "检查或升级均会在有任务时自动延后。", -1))
+        ]),
+        _: 1
+      })
+    ]),
+    _: 1
+  }))
+}
+}
+
+};
+
 const {createTextVNode:_createTextVNode$3,resolveComponent:_resolveComponent$4,withCtx:_withCtx$3,createVNode:_createVNode$3,openBlock:_openBlock$4,createBlock:_createBlock$3} = await importShared('vue');
 
 
@@ -439,7 +629,7 @@ return (_ctx, _cache) => {
 }
 
 };
-const TaskStatusFilter = /*#__PURE__*/_export_sfc(_sfc_main$3, [['__scopeId',"data-v-4050fd67"]]);
+const TaskStatusFilter = /*#__PURE__*/_export_sfc(_sfc_main$3, [['__scopeId',"data-v-95d5eebc"]]);
 
 const {openBlock:_openBlock$2,createElementBlock:_createElementBlock$1,createCommentVNode:_createCommentVNode$1,renderList:_renderList,Fragment:_Fragment,resolveComponent:_resolveComponent$2,createVNode:_createVNode$2,toDisplayString:_toDisplayString$1,createElementVNode:_createElementVNode$2,createTextVNode:_createTextVNode$1,withCtx:_withCtx$1,normalizeClass:_normalizeClass} = await importShared('vue');
 
@@ -478,7 +668,9 @@ const _hoisted_16 = { key: 1 };
 const _hoisted_17 = { key: 2 };
 const _hoisted_18 = { key: 3 };
 const _hoisted_19 = { key: 4 };
-const _hoisted_20 = { class: "task-actions" };
+const _hoisted_20 = { key: 5 };
+const _hoisted_21 = { key: 6 };
+const _hoisted_22 = { class: "task-actions" };
 
 
 const _sfc_main$2 = {
@@ -636,22 +828,28 @@ return (_ctx, _cache) => {
                     (sourceText(task))
                       ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_15, _toDisplayString$1(sourceText(task)), 1))
                       : _createCommentVNode$1("", true),
+                    (task.asr_model)
+                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_16, "模型：" + _toDisplayString$1(task.asr_model), 1))
+                      : _createCommentVNode$1("", true),
+                    (task.asr_model_reason)
+                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_17, _toDisplayString$1(task.asr_model_reason), 1))
+                      : _createCommentVNode$1("", true),
                     (task.output_name)
-                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_16, "输出：" + _toDisplayString$1(task.output_name), 1))
+                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_18, "输出：" + _toDisplayString$1(task.output_name), 1))
                       : _createCommentVNode$1("", true),
                     _createElementVNode$2("span", null, _toDisplayString$1(task.add_time || '-'), 1),
                     _createElementVNode$2("span", null, _toDisplayString$1(task.complete_time || '-'), 1),
                     (task.queue_position === 0)
-                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_17, "当前处理"))
+                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_19, "当前处理"))
                       : (task.queue_position)
-                        ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_18, "队列第 " + _toDisplayString$1(task.queue_position) + " 位", 1))
+                        ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_20, "队列第 " + _toDisplayString$1(task.queue_position) + " 位", 1))
                         : _createCommentVNode$1("", true),
                     (task.message)
-                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_19, _toDisplayString$1(task.message), 1))
+                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_21, _toDisplayString$1(task.message), 1))
                       : _createCommentVNode$1("", true)
                   ])
                 ]),
-                _createElementVNode$2("div", _hoisted_20, [
+                _createElementVNode$2("div", _hoisted_22, [
                   _createVNode$2(_component_VBtn, {
                     size: "small",
                     color: "warning",
@@ -696,7 +894,7 @@ return (_ctx, _cache) => {
 }
 
 };
-const TaskTable = /*#__PURE__*/_export_sfc(_sfc_main$2, [['__scopeId',"data-v-57d12bec"]]);
+const TaskTable = /*#__PURE__*/_export_sfc(_sfc_main$2, [['__scopeId',"data-v-b0c29cd6"]]);
 
 const {createElementVNode:_createElementVNode$1,toDisplayString:_toDisplayString,resolveComponent:_resolveComponent$1,createVNode:_createVNode$1,createTextVNode:_createTextVNode,withCtx:_withCtx,openBlock:_openBlock$1,createBlock:_createBlock$1} = await importShared('vue');
 
@@ -861,7 +1059,7 @@ return (_ctx, _cache) => {
 }
 
 };
-const TaskToolbar = /*#__PURE__*/_export_sfc(_sfc_main$1, [['__scopeId',"data-v-611b4f25"]]);
+const TaskToolbar = /*#__PURE__*/_export_sfc(_sfc_main$1, [['__scopeId',"data-v-0f14cdad"]]);
 
 const {unref:_unref,isRef:_isRef,createVNode:_createVNode,resolveComponent:_resolveComponent,openBlock:_openBlock,createBlock:_createBlock,createCommentVNode:_createCommentVNode,createElementVNode:_createElementVNode,createElementBlock:_createElementBlock} = await importShared('vue');
 
@@ -957,6 +1155,10 @@ return (_ctx, _cache) => {
     }, null, 8, ["sort-order", "status", "visible-tasks", "all-visible-selected", "cancellable-selected", "restartable-selected", "deletable-selected", "operating", "operation", "loading", "onToggleAll", "onRefresh"]),
     _createVNode(_component_VDivider),
     _createElementVNode("main", _hoisted_2, [
+      _createVNode(_sfc_main$5, {
+        api: __props.api,
+        "plugin-base": pluginBase.value
+      }, null, 8, ["api", "plugin-base"]),
       (_unref(error))
         ? (_openBlock(), _createBlock(_component_VAlert, {
             key: 0,
@@ -1011,6 +1213,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Page = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-710ac1d5"]]);
+const Page = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-57699497"]]);
 
 export { Page as default };
