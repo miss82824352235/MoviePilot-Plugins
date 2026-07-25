@@ -163,7 +163,7 @@ class SubtitleManualUploadMobile(_PluginBase):
     plugin_name = "海拉鲁字幕大师魔改版"
     plugin_desc = "合并海拉鲁字幕大师上游移动端更新，保留真实媒体库路径扫描与魔改批量操作。"
     plugin_icon = "https://raw.githubusercontent.com/ifsherlock/MoviePilot-Plugins/main/icons/subtitle-match.png"
-    plugin_version = "0.1.88-mod"
+    plugin_version = "0.1.92-mod"
     plugin_author = "ifsherlock"
     author_url = "https://github.com/ifsherlock"
     plugin_config_prefix = "subtitlemanualuploadmobile_"
