@@ -1,7 +1,7 @@
 {
   "name": "subtitlemanualuploadmobile-mod",
   "private": true,
-  "version": "0.1.88-mod",
+  "version": "0.1.91-mod",
   "type": "module",
   "scripts": {
     "build": "vite build"
