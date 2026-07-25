@@ -69,6 +69,20 @@ class AutoSubTaskApi:
                 "summary": "重新生成 AI 字幕任务",
             },
             {
+                "path": "/runtime_update/status",
+                "endpoint": self.api_runtime_update_status,
+                "methods": ["GET"],
+                "auth": "bear",
+                "summary": "获取 Whisper 运行库更新器状态",
+            },
+            {
+                "path": "/runtime_update/check",
+                "endpoint": self.api_runtime_update_check,
+                "methods": ["POST"],
+                "auth": "bear",
+                "summary": "请求宿主机检查 Whisper 运行库更新",
+            },
+            {
                 "path": "/llm_providers",
                 "endpoint": self.api_llm_providers,
                 "methods": ["GET", "POST"],
@@ -123,6 +137,14 @@ class AutoSubTaskApi:
 
     def api_status(self) -> Dict[str, Any]:
         return self._plugin._ok(self._plugin._status_payload())
+
+    def api_runtime_update_status(self) -> Dict[str, Any]:
+        """返回宿主机运行库更新器状态。"""
+        return self._plugin._ok(self._plugin._get_runtime_updater().get_status())
+
+    async def api_runtime_update_check(self, request: Request) -> Dict[str, Any]:
+        """请求宿主机更新器检查更新，不在插件进程中运行系统命令。"""
+        return self._plugin._ok(self._plugin._get_runtime_updater().request_check())
 
     async def api_debug_llm_runtime(self, request: Request) -> Dict[str, Any]:
         """调试解析后的 LLM 运行参数，默认不注册。"""

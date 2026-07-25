@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily AutoSubv3 Whisper runtime update window
+
+[Timer]
+OnCalendar=*-*-* 05:30:00
+RandomizedDelaySec=10m
+Persistent=true
+Unit=autosubv3-runtime-update.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,9 @@
+[Unit]
+Description=Safely update AutoSubv3 faster-whisper runtime
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/default/autosubv3-runtime-updater
+ExecStart=/usr/local/lib/autosubv3-runtime-updater/update.sh

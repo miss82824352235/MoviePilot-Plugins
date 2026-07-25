@@ -36,6 +36,7 @@ from .tasks.api import AutoSubTaskApi
 from .tasks.queue_worker import QueueWorker
 from .tasks.task_service import TaskService
 from .translate.openai_translate import OpenAi
+from .runtime_updater_service import RuntimeUpdaterService
 
 try:
     from app.core.plugin import PluginManager
@@ -53,7 +54,7 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
     # 主题色
     plugin_color = "#2C4F7E"
     # 插件版本
-    plugin_version = "3.5.76"
+    plugin_version = "3.5.79"
     # 插件作者
     plugin_author = "ifsherlock"
     # 作者主页
@@ -102,6 +103,7 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
     _queue_worker = None
     _task_service = None
     _task_api = None
+    _runtime_updater = None
     _subtitle_output = None
     _subtitle_cleanup = None
     _asr_service = None
@@ -245,6 +247,12 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
         if not self._task_api:
             self._task_api = AutoSubTaskApi(self)
         return self._task_api
+
+    def _get_runtime_updater(self) -> RuntimeUpdaterService:
+        """获取仅通过数据目录与宿主机更新器通信的服务。"""
+        if not self._runtime_updater:
+            self._runtime_updater = RuntimeUpdaterService(self.get_data_path)
+        return self._runtime_updater
 
     def _get_subtitle_output(self) -> SubtitleOutputService:
         if not self._subtitle_output:

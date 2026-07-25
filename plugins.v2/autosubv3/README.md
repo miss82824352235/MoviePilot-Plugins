@@ -101,6 +101,25 @@ MoviePilot V2 插件，用于从视频音轨、内嵌字幕或外挂字幕中生
 4. 无声音视频会自动跳过并记录
 5. 任务队列机制保证并发安全
 
+## 运行库自动更新（可选）
+
+插件默认**不会**自行执行 Docker、pip 或 systemctl 命令。需要自动维护
+`faster-whisper` 的管理员，可在 MoviePilot 宿主机执行一次安装器：
+
+```bash
+cd /path/to/autosubv3/runtime-updater
+sudo bash install.sh --container moviepilot-v2 --data-dir /host/config/plugins/AutoSubv3
+```
+
+其中 `--data-dir` 必须是宿主机上挂载到容器
+`/config/plugins/AutoSubv3` 的实际目录。安装后：
+
+- 每天约 05:30 检查 `faster-whisper` 的受支持最新 `1.x` 版本；
+- 有排队或运行中的 AI 字幕任务时自动延后，绝不因升级取消任务；
+- 更新后实际加载 `large-v3-turbo` 自检，失败自动用依赖快照回滚；
+- 仅在再次确认空闲时重启 MoviePilot 容器以载入新运行库；
+- 插件任务页的“Whisper 运行库维护”卡片显示状态，并可请求一次安全检查。
+
 ## 常见问题
 
 **Q: 翻译结果为空或失败？**

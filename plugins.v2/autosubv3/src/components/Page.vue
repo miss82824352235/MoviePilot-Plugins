@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted } from 'vue'
 import { useAutoSubTasks } from '../composables/useAutoSubTasks'
+import RuntimeUpdateCard from './runtime/RuntimeUpdateCard.vue'
 import RestartDialog from './tasks/RestartDialog.vue'
 import TaskStatusFilter from './tasks/TaskStatusFilter.vue'
 import TaskTable from './tasks/TaskTable.vue'
@@ -83,6 +84,7 @@ onMounted(loadTasks)
     <VDivider />
 
     <main class="autosub-content">
+      <RuntimeUpdateCard :api="api" :plugin-base="pluginBase" />
       <VAlert v-if="error" class="mb-4" type="error" variant="tonal" :text="error" />
       <VAlert v-if="message" class="mb-4" type="success" variant="tonal" :text="message" />
 
