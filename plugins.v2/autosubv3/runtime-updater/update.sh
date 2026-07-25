@@ -8,17 +8,14 @@ LOG_FILE="${LOG_FILE:-/var/log/autosubv3-runtime-updater/update.log}"
 REQUEST_FILE="${PLUGIN_DATA_DIR}/runtime-updater/request.json"
 STATUS_FILE="${PLUGIN_DATA_DIR}/runtime-updater/state.json"
 STALE_SECONDS="${STALE_SECONDS:-1800}"
+RUNTIME_VENV="${RUNTIME_VENV:-/config/plugins/AutoSubv3/runtime-venv}"
 mkdir -p "${STATE_DIR}" "$(dirname "${LOG_FILE}")" "$(dirname "${STATUS_FILE}")"
 exec 9>"${STATE_DIR}/update.lock"
 flock -n 9 || exit 0
 exec >>"${LOG_FILE}" 2>&1
 
 versions() {
-  docker exec -i "${CONTAINER}" /opt/venv/bin/python - <<'PY'
-from importlib.metadata import version
-print(version("faster-whisper"))
-print(version("ctranslate2"))
-PY
+  docker exec "${CONTAINER}" "${RUNTIME_VENV}/bin/python" -c 'from importlib.metadata import version; print(version("faster-whisper")); print(version("ctranslate2"))'
 }
 
 state() {
@@ -74,14 +71,21 @@ if ! docker inspect "${CONTAINER}" >/dev/null 2>&1; then
   state error "未找到 MoviePilot 容器：${CONTAINER}"
   exit 1
 fi
-if ! version_output="$(versions)"; then
-  state error "无法读取当前 Whisper 运行库版本"
+if ! docker exec "${CONTAINER}" /opt/venv/bin/python -m venv "${RUNTIME_VENV}"; then
+  state error "无法创建持久化 Whisper 运行库环境"
   exit 1
 fi
-readarray -t before <<<"${version_output}"
+if ! version_output="$(versions 2>/dev/null)"; then
+  version_output=""
+fi
+if [ -z "${version_output}" ]; then
+  before=("" "")
+else
+  version_output="$(printf '%s' "${version_output}" | tr -d '\r')"
+  readarray -t before <<<"${version_output}"
+fi
 if [ "${#before[@]}" -lt 2 ]; then
-  state error "当前 Whisper 运行库版本信息不完整"
-  exit 1
+  before=("" "")
 fi
 rm -f "${REQUEST_FILE}"
 if ! idle; then
@@ -89,31 +93,32 @@ if ! idle; then
   exit 0
 fi
 backup="${STATE_DIR}/requirements-$(date +%Y%m%d-%H%M%S).txt"
-docker exec "${CONTAINER}" /opt/venv/bin/pip freeze > "${backup}"
+docker exec "${CONTAINER}" "${RUNTIME_VENV}/bin/pip" freeze > "${backup}"
 rollback() {
-  docker exec -i "${CONTAINER}" /opt/venv/bin/pip install -r - < "${backup}" || true
+  docker exec -i "${CONTAINER}" "${RUNTIME_VENV}/bin/pip" install -r - < "${backup}" || true
   state rollback "运行库自检失败，已回滚" "${before[0]}" "${before[1]}"
 }
 trap rollback ERR
-docker exec "${CONTAINER}" /opt/venv/bin/pip install --upgrade 'faster-whisper>=1.2.1,<2'
+docker exec "${CONTAINER}" "${RUNTIME_VENV}/bin/pip" install --upgrade 'faster-whisper>=1.2.1,<2'
 if ! version_output="$(versions)"; then
   state error "更新后无法读取 Whisper 运行库版本" "${before[0]}" "${before[1]}"
   exit 1
 fi
+version_output="$(printf '%s' "${version_output}" | tr -d '\r')"
 readarray -t after <<<"${version_output}"
 if [ "${#after[@]}" -lt 2 ]; then
   state error "更新后 Whisper 运行库版本信息不完整" "${before[0]}" "${before[1]}"
   exit 1
 fi
-if [ "${before[0]}" = "${after[0]}" ]; then
+if [ "${before[0]}" = "${after[0]}" ] && [ "${before[1]}" = "${after[1]}" ]; then
   trap - ERR
   state up_to_date "运行库已是受支持范围内的最新版本" "${after[0]}" "${after[1]}"
   exit 0
 fi
-docker exec -i "${CONTAINER}" sh -s <<'INNER'
+docker exec -i -e RUNTIME_VENV="${RUNTIME_VENV}" "${CONTAINER}" sh -s <<'INNER'
 set -e
 export HF_HOME=/config/plugins/AutoSubv3/faster-whisper-models/cache
-python - <<'PY'
+"${RUNTIME_VENV}/bin/python" - <<'PY'
 import os
 from faster_whisper import WhisperModel
 WhisperModel("large-v3-turbo", device="cpu", compute_type="int8", cpu_threads=2, num_workers=1, download_root=os.environ["HF_HOME"])

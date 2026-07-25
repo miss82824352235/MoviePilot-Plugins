@@ -1,4 +1,6 @@
 import os
+import site
+import sys
 import tempfile
 from datetime import datetime, timedelta
 from typing import Tuple, Dict, Any, List, Optional
@@ -9,6 +11,12 @@ from app.core.event import eventmanager
 from app.schemas.types import EventType
 from app.log import logger
 from app.plugins import _PluginBase
+
+# 运行库由宿主机更新器写入持久化数据卷，避免容器重启后回退到镜像自带版本。
+_PERSISTENT_RUNTIME_SITE = "/config/plugins/AutoSubv3/runtime-venv/lib/python3.12/site-packages"
+if os.path.isdir(_PERSISTENT_RUNTIME_SITE):
+    if _PERSISTENT_RUNTIME_SITE not in sys.path:
+        sys.path.insert(0, _PERSISTENT_RUNTIME_SITE)
 from .core.compat_methods import AutoSubv3CompatMixin
 from .core.config_schema import build_config_form
 from .core.legacy_views import build_legacy_page
@@ -54,7 +62,7 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
     # 主题色
     plugin_color = "#2C4F7E"
     # 插件版本
-    plugin_version = "3.5.79"
+    plugin_version = "3.5.83"
     # 插件作者
     plugin_author = "ifsherlock"
     # 作者主页
