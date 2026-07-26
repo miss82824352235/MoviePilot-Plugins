@@ -27,6 +27,20 @@ class SubtitleLayoutServiceTests(unittest.TestCase):
         self.assertEqual(2, len(subtitle.content.split("\n")))
         self.assertGreaterEqual(report["auto_fixed"], 1)
 
+
+    def test_preserves_english_word_boundaries(self):
+        subtitle = srt.Subtitle(1, timedelta(seconds=0), timedelta(seconds=4), "If it's dark, I'll take you back again.")
+        self.service.process_subtitles([subtitle])
+        self.assertIn("If it's", subtitle.content)
+        self.assertIn("I'll", subtitle.content)
+        self.assertNotIn("I'l\nl", subtitle.content)
+        self.assertEqual("If it's dark, I'll take you back again.", subtitle.content)
+
+    def test_wraps_english_at_word_boundary(self):
+        subtitle = srt.Subtitle(1, timedelta(seconds=0), timedelta(seconds=3), "Please take me back home tonight")
+        self.service.process_subtitles([subtitle])
+        self.assertEqual("Please take me\nback home tonight", subtitle.content)
+
     def test_bilingual_does_not_add_a_third_line(self):
         subtitle = srt.Subtitle(1, timedelta(seconds=0), timedelta(seconds=3), "这是一个足够长的中文字幕测试用于验证自动换行是否符合播放规范\nThis is source")
         self.service.process_subtitles([subtitle], bilingual=True)

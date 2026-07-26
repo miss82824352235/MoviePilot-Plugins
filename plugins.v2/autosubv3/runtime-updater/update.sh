@@ -99,7 +99,7 @@ rollback() {
   state rollback "运行库自检失败，已回滚" "${before[0]}" "${before[1]}"
 }
 trap rollback ERR
-docker exec "${CONTAINER}" "${RUNTIME_VENV}/bin/pip" install --upgrade 'faster-whisper>=1.2.1,<2'
+docker exec "${CONTAINER}" "${RUNTIME_VENV}/bin/pip" install --upgrade 'faster-whisper>=1.2.1,<2' 'srt~=3.5.3'
 if ! version_output="$(versions)"; then
   state error "更新后无法读取 Whisper 运行库版本" "${before[0]}" "${before[1]}"
   exit 1

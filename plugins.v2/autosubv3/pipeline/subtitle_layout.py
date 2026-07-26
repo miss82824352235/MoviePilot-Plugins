@@ -48,9 +48,19 @@ class SubtitleLayoutService:
 
     @staticmethod
     def _normalize_translation(text: str) -> str:
-        text = re.sub(r"[ \t]+", "", text or "").strip()
+        text = text or ""
+        if SubtitleLayoutService._is_cjk(text):
+            text = re.sub(r"[ \t]+", "", text)
+        else:
+            text = re.sub(r"[ \t]+", " ", text)
+        text = text.strip()
         text = re.sub(r"…{2,}", "…", text)
         return text[:-1].rstrip() if text.endswith("。") else text
+
+    @staticmethod
+    def _is_cjk(text: str) -> bool:
+        """Chinese and Japanese subtitles normally do not use word spacing."""
+        return bool(re.search(r"[\u3400-\u9fff\u3040-\u30ff]", text or ""))
 
     def _wrap_chinese(self, text: str) -> Tuple[str, bool]:
         text = self._normalize_translation(text)
@@ -69,9 +79,40 @@ class SubtitleLayoutService:
             return text, False
         return f"{left}\n{right}", True
 
+    def _wrap_text(self, text: str) -> Tuple[str, bool]:
+        text = self._normalize_translation(text)
+        if self._is_cjk(text):
+            return self._wrap_chinese(text)
+        words = text.split()
+        if len(words) < 2:
+            return text, False
+        for split_at in range(1, len(words)):
+            left = " ".join(words[:split_at])
+            right = " ".join(words[split_at:])
+            if (self._display_length(left) <= self.max_chars_per_line and
+                    self._display_length(right) <= self.max_chars_per_line):
+                return "\n".join([left, right]), True
+        return text, False
+
     def _split_text(self, text: str, limit: int) -> List[str]:
         """Split an overlong translation near punctuation without dropping text."""
         text = self._normalize_translation(text)
+        if not self._is_cjk(text):
+            chunks = []
+            words = text.split()
+            current = []
+            current_length = 0
+            for word in words:
+                word_length = self._display_length(word)
+                if current and current_length + word_length > limit:
+                    chunks.append(" ".join(current))
+                    current, current_length = [word], word_length
+                else:
+                    current.append(word)
+                    current_length += word_length
+            if current:
+                chunks.append(" ".join(current))
+            return chunks or ([text] if text else [])
         chunks = []
         while self._display_length(text) > limit:
             candidates = [match.start() + 1 for match in re.finditer(r"[，、；：？！?!]", text[:limit + 1])]
@@ -145,7 +186,7 @@ class SubtitleLayoutService:
             if bilingual and len(lines) > 1:
                 item.content = "\n".join([translated] + lines[1:])
             else:
-                wrapped, changed = self._wrap_chinese(translated)
+                wrapped, changed = self._wrap_text(translated)
                 item.content = wrapped
                 if changed:
                     report["auto_fixed"] += 1
