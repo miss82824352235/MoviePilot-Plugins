@@ -103,7 +103,8 @@ class SubtitleLayoutService:
 
     def _split_text(self, text: str, limit: int) -> List[str]:
         """Split an overlong translation near punctuation without dropping text."""
-        text = self._normalize_translation(text)
+        raw_text = text or ""
+        text = self._normalize_translation(raw_text)
         if not self._is_cjk(text):
             chunks = []
             current = []
@@ -116,6 +117,19 @@ class SubtitleLayoutService:
                     current = candidate
             if current:
                 chunks.append(" ".join(current))
+            return chunks or ([text] if text else [])
+        if re.search(r"[\u3040-\u30ff]", raw_text) and re.search(r"\s", raw_text):
+            chunks = []
+            current = []
+            for word in raw_text.split():
+                candidate = current + [word]
+                if current and self._display_length("".join(candidate)) > limit:
+                    chunks.append("".join(current))
+                    current = [word]
+                else:
+                    current = candidate
+            if current:
+                chunks.append("".join(current))
             return chunks or ([text] if text else [])
         chunks = []
         while self._display_length(text) > limit:
@@ -130,11 +144,12 @@ class SubtitleLayoutService:
 
     def _split_overlong_subtitle(self, item: srt.Subtitle, next_start) -> List[srt.Subtitle]:
         """Safely divide a too-long cue when its timeline has enough room."""
-        text = self._normalize_translation((item.content or "").split("\n")[0])
+        raw_text = (item.content or "").split("\n")[0]
+        text = self._normalize_translation(raw_text)
         capacity = self.max_lines * self.max_chars_per_line
         if self._display_length(text) <= capacity:
             return []
-        chunks = self._split_text(text, capacity)
+        chunks = self._split_text(raw_text, capacity)
         if len(chunks) < 2:
             return []
         required = max(self.min_duration * len(chunks), self._display_length(text) / self.max_reading_speed)

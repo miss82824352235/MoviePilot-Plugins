@@ -305,11 +305,13 @@ class AsrService:
             pause = max(0.0, (item.start - current.end).total_seconds())
             candidate_duration = (item.end - current.start).total_seconds()
             candidate_chars = text_len(current.content) + text_len(content)
+            cjk_words = bool(re.search(r"[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]", current.content + content))
+            char_limit = max_chars * 2 if cjk_words else max_chars
             strong_boundary = current.content.rstrip().endswith(end_tokens) or pause >= 0.55
             soft_boundary = (current.content.rstrip().endswith(soft_break_tokens) and
                              (pause >= 0.32 or duration_seconds(current) >= max_duration * 0.5 or
-                              text_len(current.content) >= max_chars * 0.65))
-            if strong_boundary or soft_boundary or candidate_duration > max_duration or candidate_chars > max_chars:
+                              text_len(current.content) >= char_limit * 0.65))
+            if strong_boundary or soft_boundary or candidate_duration > max_duration or candidate_chars > char_limit:
                 merged_subtitle.append(item)
                 continue
             current.content = f"{current.content} {content}".strip()

@@ -50,6 +50,14 @@ class SubtitleLayoutServiceTests(unittest.TestCase):
         self.assertEqual("wieder ab.", subtitles[1].content)
         self.assertNotIn("\n", subtitles[1].content)
 
+    def test_splits_japanese_on_whisper_word_boundaries(self):
+        subtitle = srt.Subtitle(1, timedelta(seconds=0), timedelta(seconds=5), "そんな こと あり ません よ あ なた 笑う と とても いい 男ね もっと 笑い なさい よ")
+        subtitles = [subtitle]
+        self.service.process_subtitles(subtitles)
+        self.assertEqual(2, len(subtitles))
+        self.assertNotIn("あ\n", subtitles[0].content)
+        self.assertTrue(any("あなた" in item.content for item in subtitles))
+
     def test_bilingual_does_not_add_a_third_line(self):
         subtitle = srt.Subtitle(1, timedelta(seconds=0), timedelta(seconds=3), "这是一个足够长的中文字幕测试用于验证自动换行是否符合播放规范\nThis is source")
         self.service.process_subtitles([subtitle], bilingual=True)
