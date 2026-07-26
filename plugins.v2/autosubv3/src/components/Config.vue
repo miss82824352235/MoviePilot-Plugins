@@ -35,8 +35,8 @@ const defaultConfig = {
   auto_detect_language: false,
   asr_model_strategy: 'auto_english_fast',
   skip_chinese: false,
-  max_segment_duration: 8,
-  max_segment_chars: 50,
+    max_segment_duration: 5.5,
+    max_segment_chars: 28,
   subtitle_max_lines: 2,
   subtitle_max_chars_per_line: 14,
   subtitle_min_duration: 0.9,
@@ -551,10 +551,10 @@ function save() {
 
         <VRow>
           <VCol cols="12" md="4">
-            <VTextField v-model="config.max_segment_duration" label="每段字幕最大时长（秒）" placeholder="8" />
+              <VTextField v-model="config.max_segment_duration" label="每段字幕最大时长（秒）" placeholder="5.5" />
           </VCol>
           <VCol cols="12" md="4">
-            <VTextField v-model="config.max_segment_chars" label="每段字幕最大字符数" placeholder="50" />
+              <VTextField v-model="config.max_segment_chars" label="每段字幕最大字符数" placeholder="28" hint="会自动限制为显示规范的两行容量" persistent-hint />
           </VCol>
           <VCol cols="12" md="4">
             <VTextField v-model="config.file_size" label="文件最小大小（MB）" placeholder="10" />

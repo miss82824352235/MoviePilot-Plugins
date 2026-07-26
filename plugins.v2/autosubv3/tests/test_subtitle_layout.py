@@ -40,6 +40,16 @@ class SubtitleLayoutServiceTests(unittest.TestCase):
     def test_defaults_to_fourteen_characters_per_line(self):
         self.assertEqual(14, SubtitleLayoutService({}).max_chars_per_line)
 
+    def test_splits_overlong_cue_when_timeline_allows(self):
+        subtitle = srt.Subtitle(1, timedelta(seconds=0), timedelta(seconds=4), "这是一段超过两行显示容量的中文字幕，需要自动拆成两条独立时间轴字幕以便观众阅读")
+        subtitles = [subtitle]
+        report = self.service.process_subtitles(subtitles)
+        self.assertEqual(2, len(subtitles))
+        self.assertEqual(1, report["overlong"])
+        self.assertGreaterEqual(report["auto_fixed"], 1)
+        for item in subtitles:
+            self.assertLessEqual(len(item.content.replace("\n", "")), 32)
+
 
 if __name__ == "__main__":
     unittest.main()

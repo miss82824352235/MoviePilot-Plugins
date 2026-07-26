@@ -250,7 +250,9 @@ class TranslationService:
                 status = "[待译]" if idx in target_set else ""
                 content = str(original_contents[idx] or "").replace('\n', ' ').strip()
                 lines.append(f"{status}{content}")
-            return "\n".join(lines)
+            subtitle_context = "\n".join(lines)
+            task_context = self._task_context().strip()
+            return f"{task_context}\n\n{subtitle_context}" if task_context else subtitle_context
 
         batches = []
         for i in range(0, total, batch_size):
@@ -276,7 +278,12 @@ class TranslationService:
             batch_originals = [original_contents[gidx].strip() for gidx in indices]
 
             try:
-                ret, translations = self._openai().translate_batch_to_zh(batch_originals)
+                context = original_context(indices, is_batch=True)
+                ret, translations = self._openai().translate_batch_to_zh(
+                    batch_originals,
+                    context=context,
+                    max_retries=self._max_retries(),
+                )
                 self._raise_if_task_cancelled()
                 if not ret:
                     raise ValueError("批量翻译接口返回失败")

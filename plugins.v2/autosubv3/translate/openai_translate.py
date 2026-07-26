@@ -165,7 +165,12 @@ class OpenAi:
                     print(f"翻译请求失败 (已重试{max_retries}次)：{last_error}")
                     return False, f"{last_error}"
 
-    def translate_batch_to_zh(self, texts: List[str], max_retries: int = 3) -> Tuple[bool, List[Optional[str]]]:
+    def translate_batch_to_zh(
+        self,
+        texts: List[str],
+        context: str = None,
+        max_retries: int = 3,
+    ) -> Tuple[bool, List[Optional[str]]]:
         """批量翻译：JSON结构化输出，按id校验，尽量避免串行"""
         input_batch = []
         for idx, text in enumerate(texts, 1):
@@ -174,6 +179,8 @@ class OpenAi:
                 "text": self._clean_text(text)
             })
 
+        context = self._clean_text(context) if context else ""
+        context_section = f"\n任务与字幕上下文（仅用于理解，不要翻译或输出）：\n{context}\n" if context else ""
         prompt = f"""
 你是专业字幕翻译器。
 
@@ -187,6 +194,7 @@ class OpenAi:
 7. 口语化，符合中文观影习惯
 8. 译文简洁，不能为缩短而丢失关键信息
 9. 保留问号和感叹号；通常不要行末句号；避免无意义省略号
+{context_section}
 
 输入：
 {json.dumps(input_batch, ensure_ascii=False)}

@@ -69,18 +69,76 @@ class SubtitleLayoutService:
             return text, False
         return f"{left}\n{right}", True
 
+    def _split_text(self, text: str, limit: int) -> List[str]:
+        """Split an overlong translation near punctuation without dropping text."""
+        text = self._normalize_translation(text)
+        chunks = []
+        while self._display_length(text) > limit:
+            candidates = [match.start() + 1 for match in re.finditer(r"[，、；：？！?!]", text[:limit + 1])]
+            split_at = candidates[-1] if candidates else limit
+            chunk = text[:split_at].strip()
+            if not chunk:
+                return [text]
+            chunks.append(chunk)
+            text = text[split_at:].strip()
+        return chunks + ([text] if text else [])
+
+    def _split_overlong_subtitle(self, item: srt.Subtitle, next_start) -> List[srt.Subtitle]:
+        """Safely divide a too-long Chinese cue when its timeline has enough room."""
+        text = self._normalize_translation((item.content or "").split("\n")[0])
+        capacity = self.max_lines * self.max_chars_per_line
+        if self._display_length(text) <= capacity:
+            return []
+        chunks = self._split_text(text, capacity)
+        if len(chunks) < 2:
+            return []
+        required = max(self.min_duration * len(chunks), self._display_length(text) / self.max_reading_speed)
+        available_end = item.start + timedelta(seconds=min(self.max_duration, required))
+        if next_start:
+            available_end = min(available_end, next_start - timedelta(milliseconds=40))
+        if (available_end - item.start).total_seconds() + 1e-6 < required:
+            return []
+        available_seconds = (available_end - item.start).total_seconds()
+        minimum_total = self.min_duration * len(chunks)
+        remaining_seconds = max(0.0, available_seconds - minimum_total)
+        weights = [self._display_length(chunk) for chunk in chunks]
+        total_weight = max(1, sum(weights))
+        cursor = item.start
+        split_items = []
+        for index, (chunk, weight) in enumerate(zip(chunks, weights), 1):
+            duration = self.min_duration + remaining_seconds * weight / total_weight
+            end = available_end if index == len(chunks) else cursor + timedelta(seconds=duration)
+            split_items.append(srt.Subtitle(index=item.index, start=cursor, end=end, content=chunk))
+            cursor = end
+        return split_items
+
     def process_file(self, path: str, bilingual: bool = False) -> Dict[str, int]:
         with open(path, "r", encoding="utf-8") as handle:
             subtitles = list(srt.parse(handle.read()))
         report = self.process_subtitles(subtitles, bilingual=bilingual)
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(srt.compose(subtitles))
+        report["total"] = len(subtitles)
         return report
 
     def process_subtitles(self, subtitles: List[srt.Subtitle], bilingual: bool = False) -> Dict[str, int]:
         report = {"total": len(subtitles), "overlong": 0, "over_speed": 0, "overlap": 0,
                   "too_short": 0, "line_overflow": 0, "auto_fixed": 0, "remaining": 0}
         gap = timedelta(milliseconds=40)
+        prepared = []
+        for index, item in enumerate(subtitles):
+            lines = (item.content or "").split("\n")
+            next_start = subtitles[index + 1].start if index + 1 < len(subtitles) else None
+            if not bilingual or len(lines) <= 1:
+                split_items = self._split_overlong_subtitle(item, next_start)
+                if split_items:
+                    report["overlong"] += 1
+                    report["auto_fixed"] += 1
+                    prepared.extend(split_items)
+                    continue
+            prepared.append(item)
+        subtitles[:] = prepared
+
         for index, item in enumerate(subtitles):
             lines = (item.content or "").split("\n")
             translated = self._normalize_translation(lines[0]) if lines else ""
@@ -118,6 +176,8 @@ class SubtitleLayoutService:
                     item.end = safe_end
                     report["auto_fixed"] += 1
 
+        for index, item in enumerate(subtitles, 1):
+            item.index = index
         for item in subtitles:
             duration = self._duration(item)
             text = (item.content or "").split("\n")[0]
