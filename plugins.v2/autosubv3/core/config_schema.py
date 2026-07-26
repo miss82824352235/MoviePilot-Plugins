@@ -140,6 +140,26 @@ def build_config_form() -> Tuple[List[dict], Dict[str, Any]]:
                         {
                             "component": "VCol",
                             "props": {"cols": 12},
+                            "content": [{
+                                "component": "VTextarea",
+                                "props": {
+                                    "model": "default_glossary",
+                                    "label": "默认术语表",
+                                    "rows": 3,
+                                    "placeholder": "每行一个术语，例如：Hamilton = 汉密尔顿",
+                                    "hint": "应用到所有新任务；联动提交时提供的本片术语表会优先覆盖。",
+                                    "persistent-hint": True,
+                                },
+                            }],
+                        },
+                    ],
+                },
+                {
+                    "component": "VRow",
+                    "content": [
+                        {
+                            "component": "VCol",
+                            "props": {"cols": 12},
                             "content": [
                                 {
                                     "component": "VTextarea",
@@ -373,10 +393,11 @@ def build_config_form() -> Tuple[List[dict], Dict[str, Any]]:
         "max_segment_duration": 8.0,
         "max_segment_chars": 50,
         "subtitle_max_lines": 2,
-        "subtitle_max_chars_per_line": 16,
+        "subtitle_max_chars_per_line": 14,
         "subtitle_min_duration": 0.9,
         "subtitle_max_duration": 5.5,
         "subtitle_max_reading_speed": 14.0,
+        "default_glossary": "",
         "faster_whisper_model": "base",
         "proxy": True,
         "openai_proxy": False,

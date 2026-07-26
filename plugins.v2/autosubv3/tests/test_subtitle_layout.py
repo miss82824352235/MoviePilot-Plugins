@@ -37,6 +37,9 @@ class SubtitleLayoutServiceTests(unittest.TestCase):
         self.service.process_subtitles([subtitle])
         self.assertGreaterEqual((subtitle.end - subtitle.start).total_seconds(), 0.9)
 
+    def test_defaults_to_fourteen_characters_per_line(self):
+        self.assertEqual(14, SubtitleLayoutService({}).max_chars_per_line)
+
 
 if __name__ == "__main__":
     unittest.main()

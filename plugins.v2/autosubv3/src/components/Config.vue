@@ -38,10 +38,11 @@ const defaultConfig = {
   max_segment_duration: 8,
   max_segment_chars: 50,
   subtitle_max_lines: 2,
-  subtitle_max_chars_per_line: 16,
+  subtitle_max_chars_per_line: 14,
   subtitle_min_duration: 0.9,
   subtitle_max_duration: 5.5,
   subtitle_max_reading_speed: 14,
+  default_glossary: '',
   faster_whisper_model: 'base',
   proxy: true,
   openai_proxy: false,
@@ -561,10 +562,23 @@ function save() {
         </VRow>
 
         <VRow>
-          <VCol cols="12" md="3"><VTextField v-model="config.subtitle_max_chars_per_line" label="中文每行最大字数" placeholder="16" /></VCol>
+          <VCol cols="12" md="3"><VTextField v-model="config.subtitle_max_chars_per_line" label="中文每行最大字数" placeholder="14" /></VCol>
           <VCol cols="12" md="3"><VTextField v-model="config.subtitle_min_duration" label="字幕最短时长（秒）" placeholder="0.9" /></VCol>
           <VCol cols="12" md="3"><VTextField v-model="config.subtitle_max_duration" label="字幕最长时长（秒）" placeholder="5.5" /></VCol>
           <VCol cols="12" md="3"><VTextField v-model="config.subtitle_max_reading_speed" label="最大阅读速度（字/秒）" placeholder="14" /></VCol>
+        </VRow>
+
+        <VRow>
+          <VCol cols="12">
+            <VTextarea
+              v-model="config.default_glossary"
+              label="默认术语表"
+              :rows="3"
+              placeholder="每行一个术语，例如：Hamilton = 汉密尔顿；Eliza = 伊莱莎"
+              hint="应用到所有新任务；联动提交时提供的本片术语表会优先覆盖。"
+              persistent-hint
+            />
+          </VCol>
         </VRow>
 
         <VRow>

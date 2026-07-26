@@ -63,7 +63,7 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
     # 主题色
     plugin_color = "#2C4F7E"
     # 插件版本
-    plugin_version = "3.5.85"
+    plugin_version = "3.5.86"
     # 插件作者
     plugin_author = "ifsherlock"
     # 作者主页
@@ -170,11 +170,12 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
         self._max_segment_chars = int(config.get('max_segment_chars')) if config.get('max_segment_chars') else 50
         self._subtitle_layout_settings = {
             "subtitle_max_lines": config.get("subtitle_max_lines", 2),
-            "subtitle_max_chars_per_line": config.get("subtitle_max_chars_per_line", 16),
+            "subtitle_max_chars_per_line": config.get("subtitle_max_chars_per_line", 14),
             "subtitle_min_duration": config.get("subtitle_min_duration", 0.9),
             "subtitle_max_duration": config.get("subtitle_max_duration", 5.5),
             "subtitle_max_reading_speed": config.get("subtitle_max_reading_speed", 14.0),
         }
+        self._default_glossary = self._normalize_text(config.get("default_glossary"))
         self._translate_zh = config.get('translate_zh', False)
         if self._translate_zh:
             # AutoSubv3 使用插件自己的独立 LLM 配置。这里禁止读取 MoviePilot

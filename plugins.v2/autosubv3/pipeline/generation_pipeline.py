@@ -172,6 +172,35 @@ class GenerationPipeline:
                     plugin._current_processing_task.output_path = translated_subtitle
                     plugin._current_processing_task.output_variant = output_variant
                 translated_to_zh = True
+            else:
+                generated_sources = {
+                    ResolvedSource.ASR.value,
+                    ResolvedSource.EMBEDDED.value,
+                }
+                output_path = os.fspath(gen_sub_path)
+                if resolved_source in generated_sources:
+                    plugin._update_current_task_progress(94, "cleanup_subtitle", "清理生成字幕", save=True)
+                    cleanup_stats = plugin._get_subtitle_cleanup().clean_srt_file(output_path)
+                    if cleanup_stats.changed_blocks or cleanup_stats.removed_blocks:
+                        self._logger.info(
+                            "生成字幕清理完成：文件=%s 修改块=%s 删除块=%s",
+                            os.path.basename(output_path),
+                            cleanup_stats.changed_blocks,
+                            cleanup_stats.removed_blocks,
+                        )
+                    plugin._update_current_task_progress(96, "quality_check", "检查字幕显示规范与时间轴", save=True)
+                    quality_report = plugin._get_subtitle_layout().process_file(output_path)
+                    if plugin._current_processing_task:
+                        plugin._current_processing_task.subtitle_quality_report = quality_report
+                        plugin.save_tasks()
+                    self._logger.info(
+                        "生成字幕质检完成：超长=%s 超速=%s 重叠=%s 自动修复=%s 剩余注意=%s",
+                        quality_report["overlong"], quality_report["over_speed"], quality_report["overlap"],
+                        quality_report["auto_fixed"], quality_report["remaining"],
+                    )
+                if plugin._current_processing_task:
+                    plugin._current_processing_task.output_path = output_path
+                plugin._update_current_task_progress(98, "write_output", "写入生成字幕", save=True)
 
             end_time = time.time()
             message = f" 媒体: {file_name}\n 处理完成\n 字幕原始语言: {lang}\n "

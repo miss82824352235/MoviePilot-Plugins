@@ -24,7 +24,7 @@ class SubtitleLayoutService:
 
     @property
     def max_chars_per_line(self):
-        return self._number("subtitle_max_chars_per_line", 16, 8)
+        return self._number("subtitle_max_chars_per_line", 14, 8)
 
     @property
     def min_duration(self):

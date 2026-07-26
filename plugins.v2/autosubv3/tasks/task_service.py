@@ -518,7 +518,10 @@ class TaskService:
             media_title=self._plugin._normalize_text(media_context.get("title")),
             media_overview=self._plugin._normalize_text(media_context.get("overview")),
             media_cast=self._plugin._normalize_text(media_context.get("cast")),
-            glossary=self._plugin._normalize_text(media_context.get("glossary")),
+            glossary=(
+                self._plugin._normalize_text(media_context.get("glossary"))
+                or self._plugin._normalize_text(getattr(self._plugin, "_default_glossary", ""))
+            ),
             add_time=datetime.now()
         )
         if task.asr_model_strategy == "manual":
