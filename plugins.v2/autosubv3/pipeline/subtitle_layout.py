@@ -79,37 +79,41 @@ class SubtitleLayoutService:
             return text, False
         return f"{left}\n{right}", True
 
-    def _wrap_text(self, text: str) -> Tuple[str, bool]:
-        text = self._normalize_translation(text)
-        if self._is_cjk(text):
-            return self._wrap_chinese(text)
-        words = text.split()
-        if len(words) < 2:
-            return text, False
+    def _wrap_words(self, words: List[str]) -> List[str]:
+        if not words:
+            return []
+        if self._display_length(" ".join(words)) <= self.max_chars_per_line:
+            return [" ".join(words)]
         for split_at in range(1, len(words)):
             left = " ".join(words[:split_at])
             right = " ".join(words[split_at:])
             if (self._display_length(left) <= self.max_chars_per_line and
                     self._display_length(right) <= self.max_chars_per_line):
-                return "\n".join([left, right]), True
-        return text, False
+                return [left, right]
+        return []
+
+    def _wrap_text(self, text: str) -> Tuple[str, bool]:
+        text = self._normalize_translation(text)
+        if self._is_cjk(text):
+            return self._wrap_chinese(text)
+        lines = self._wrap_words(text.split())
+        if len(lines) != 2:
+            return text, False
+        return "\n".join(lines), True
 
     def _split_text(self, text: str, limit: int) -> List[str]:
         """Split an overlong translation near punctuation without dropping text."""
         text = self._normalize_translation(text)
         if not self._is_cjk(text):
             chunks = []
-            words = text.split()
             current = []
-            current_length = 0
-            for word in words:
-                word_length = self._display_length(word)
-                if current and current_length + word_length > limit:
+            for word in text.split():
+                candidate = current + [word]
+                if current and not self._wrap_words(candidate):
                     chunks.append(" ".join(current))
-                    current, current_length = [word], word_length
+                    current = [word]
                 else:
-                    current.append(word)
-                    current_length += word_length
+                    current = candidate
             if current:
                 chunks.append(" ".join(current))
             return chunks or ([text] if text else [])
@@ -125,7 +129,7 @@ class SubtitleLayoutService:
         return chunks + ([text] if text else [])
 
     def _split_overlong_subtitle(self, item: srt.Subtitle, next_start) -> List[srt.Subtitle]:
-        """Safely divide a too-long Chinese cue when its timeline has enough room."""
+        """Safely divide a too-long cue when its timeline has enough room."""
         text = self._normalize_translation((item.content or "").split("\n")[0])
         capacity = self.max_lines * self.max_chars_per_line
         if self._display_length(text) <= capacity:

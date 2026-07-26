@@ -41,6 +41,15 @@ class SubtitleLayoutServiceTests(unittest.TestCase):
         self.service.process_subtitles([subtitle])
         self.assertEqual("Please take me\nback home tonight", subtitle.content)
 
+    def test_splits_german_cue_into_playable_word_groups(self):
+        subtitle = srt.Subtitle(1, timedelta(seconds=0), timedelta(seconds=5), "Wenn es dunkel wird, hole ich dich wieder ab.")
+        subtitles = [subtitle]
+        self.service.process_subtitles(subtitles)
+        self.assertEqual(2, len(subtitles))
+        self.assertEqual("Wenn es dunkel\nwird, hole ich dich", subtitles[0].content)
+        self.assertEqual("wieder ab.", subtitles[1].content)
+        self.assertNotIn("\n", subtitles[1].content)
+
     def test_bilingual_does_not_add_a_third_line(self):
         subtitle = srt.Subtitle(1, timedelta(seconds=0), timedelta(seconds=3), "这是一个足够长的中文字幕测试用于验证自动换行是否符合播放规范\nThis is source")
         self.service.process_subtitles([subtitle], bilingual=True)
