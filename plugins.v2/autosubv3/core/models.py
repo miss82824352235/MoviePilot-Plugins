@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
@@ -96,3 +96,12 @@ class TaskItem:
     asr_model_reason: str = ""
     asr_audio_language: str = ""
     asr_model_strategy: str = ""
+    tmdb_id: str = ""
+    media_type: str = ""
+    season: str = ""
+    episode: str = ""
+    media_title: str = ""
+    media_overview: str = ""
+    media_cast: str = ""
+    glossary: str = ""
+    subtitle_quality_report: dict = field(default_factory=dict)

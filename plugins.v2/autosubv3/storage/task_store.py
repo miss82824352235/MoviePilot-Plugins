@@ -56,6 +56,15 @@ class TaskStore:
                     asr_model_reason=task_dict.get("asr_model_reason", ""),
                     asr_audio_language=task_dict.get("asr_audio_language", ""),
                     asr_model_strategy=task_dict.get("asr_model_strategy", ""),
+                    tmdb_id=task_dict.get("tmdb_id", ""),
+                    media_type=task_dict.get("media_type", ""),
+                    season=task_dict.get("season", ""),
+                    episode=task_dict.get("episode", ""),
+                    media_title=task_dict.get("media_title", ""),
+                    media_overview=task_dict.get("media_overview", ""),
+                    media_cast=task_dict.get("media_cast", ""),
+                    glossary=task_dict.get("glossary", ""),
+                    subtitle_quality_report=task_dict.get("subtitle_quality_report") or {},
                 )
                 tasks[task_id] = task
             except Exception as exc:
@@ -96,6 +105,15 @@ class TaskStore:
             "asr_model_reason": task.asr_model_reason or "",
             "asr_audio_language": task.asr_audio_language or "",
             "asr_model_strategy": task.asr_model_strategy or "",
+            "tmdb_id": task.tmdb_id or "",
+            "media_type": task.media_type or "",
+            "season": task.season or "",
+            "episode": task.episode or "",
+            "media_title": task.media_title or "",
+            "media_overview": task.media_overview or "",
+            "media_cast": task.media_cast or "",
+            "glossary": task.glossary or "",
+            "subtitle_quality_report": task.subtitle_quality_report or {},
         }
 
     def save_tasks(self, tasks: Dict[str, TaskItem]):

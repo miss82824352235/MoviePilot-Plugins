@@ -78,6 +78,12 @@ class TaskService:
             "asr_model_reason": task.asr_model_reason or "",
             "asr_audio_language": task.asr_audio_language or "",
             "asr_model_strategy": task.asr_model_strategy or "",
+            "tmdb_id": task.tmdb_id or "",
+            "media_type": task.media_type or "",
+            "season": task.season or "",
+            "episode": task.episode or "",
+            "media_title": task.media_title or "",
+            "subtitle_quality_report": task.subtitle_quality_report or {},
             "output_path": task.output_path or "",
             "output_name": os.path.basename(task.output_path or ""),
             "output_variant": task.output_variant or "",
@@ -205,6 +211,16 @@ class TaskService:
                 source_policy=item_policy,
                 overwrite_policy=self._plugin._normalize_overwrite_policy(override.get("overwrite_policy"), normalized_overwrite),
                 source_name=self._plugin._normalize_text(override.get("source_name")) or os.path.basename(source_subtitle_path),
+                media_context={
+                    "tmdb_id": override.get("tmdb_id"),
+                    "media_type": override.get("media_type"),
+                    "season": override.get("season"),
+                    "episode": override.get("episode"),
+                    "title": override.get("title") or override.get("media_title"),
+                    "overview": override.get("overview") or override.get("media_overview"),
+                    "cast": override.get("cast") or override.get("media_cast"),
+                    "glossary": override.get("glossary"),
+                },
             ):
                 item = {"path": video_file}
                 if source_subtitle_path:
@@ -467,6 +483,7 @@ class TaskService:
         output_variant: str = "",
         reuse_output_path: str = "",
         reuse_source_lang: str = "",
+        media_context: Optional[Dict[str, Any]] = None,
     ):
         task_id = str(uuid4())
         normalized_policy = self._plugin._normalize_source_policy(source_policy)
@@ -474,6 +491,7 @@ class TaskService:
             normalized_policy = SourcePolicy.AUTO.value
         if source_subtitle_path and normalized_policy == SourcePolicy.AUTO.value:
             normalized_policy = SourcePolicy.MATCHED_EXTERNAL.value
+        media_context = media_context or {}
         task = TaskItem(
             task_id=task_id,
             video_file=video_file,
@@ -493,6 +511,14 @@ class TaskService:
             reuse_output_path=self._plugin._normalize_text(reuse_output_path),
             reuse_source_lang=self._plugin._normalize_text(reuse_source_lang),
             asr_model_strategy=(self._plugin._asr_model_strategy or "auto_english_fast"),
+            tmdb_id=self._plugin._normalize_text(media_context.get("tmdb_id")),
+            media_type=self._plugin._normalize_text(media_context.get("media_type")),
+            season=self._plugin._normalize_text(media_context.get("season")),
+            episode=self._plugin._normalize_text(media_context.get("episode")),
+            media_title=self._plugin._normalize_text(media_context.get("title")),
+            media_overview=self._plugin._normalize_text(media_context.get("overview")),
+            media_cast=self._plugin._normalize_text(media_context.get("cast")),
+            glossary=self._plugin._normalize_text(media_context.get("glossary")),
             add_time=datetime.now()
         )
         if task.asr_model_strategy == "manual":

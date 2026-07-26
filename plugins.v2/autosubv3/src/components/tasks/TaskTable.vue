@@ -70,6 +70,14 @@ function progressValue(task) {
 function showProgress(task) {
   return ['pending', 'in_progress', 'completed', 'failed', 'cancelled', 'ignored', 'no_audio'].includes(task?.status)
 }
+
+function qualitySummary(task) {
+  const report = task?.subtitle_quality_report || {}
+  if (!Object.keys(report).length) return ''
+  let summary = '质检：超长 ' + (report.overlong || 0) + '｜超速 ' + (report.over_speed || 0)
+  summary += '｜重叠 ' + (report.overlap || 0) + '｜已修复 ' + (report.auto_fixed || 0)
+  return report.remaining ? summary + '｜需注意 ' + report.remaining : summary
+}
 </script>
 
 <template>
@@ -123,6 +131,7 @@ function showProgress(task) {
           <span v-if="sourceText(task)">{{ sourceText(task) }}</span>
           <span v-if="task.asr_model">模型：{{ task.asr_model }}</span>
           <span v-if="task.asr_model_reason">{{ task.asr_model_reason }}</span>
+          <span v-if="qualitySummary(task)">{{ qualitySummary(task) }}</span>
           <span v-if="task.output_name">输出：{{ task.output_name }}</span>
           <span>{{ task.add_time || '-' }}</span>
           <span>{{ task.complete_time || '-' }}</span>

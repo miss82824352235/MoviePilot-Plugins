@@ -303,6 +303,7 @@ class AutoSubv3CompatMixin:
         output_variant: str = "",
         reuse_output_path: str = "",
         reuse_source_lang: str = "",
+        media_context: Optional[Dict[str, Any]] = None,
     ):
         return self._get_task_service().add_task(
             video_file,
@@ -318,6 +319,7 @@ class AutoSubv3CompatMixin:
             output_variant=output_variant,
             reuse_output_path=reuse_output_path,
             reuse_source_lang=reuse_source_lang,
+            media_context=media_context,
         )
 
     def clear_tasks(self):

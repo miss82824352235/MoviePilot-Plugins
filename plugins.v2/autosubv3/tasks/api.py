@@ -164,6 +164,12 @@ class AutoSubTaskApi:
         if not isinstance(paths, list):
             paths = []
         subtitle_overrides = body.get("subtitle_overrides") if isinstance(body.get("subtitle_overrides"), dict) else None
+        media_context = body.get("media_context") if isinstance(body.get("media_context"), dict) else {}
+        if media_context:
+            subtitle_overrides = dict(subtitle_overrides or {})
+            for path in paths:
+                original = subtitle_overrides.get(path) if isinstance(subtitle_overrides.get(path), dict) else {}
+                subtitle_overrides[path] = {**media_context, **original}
         result = self._plugin.submit_tasks(
             paths,
             source=self._plugin._normalize_text(body.get("source")) or TaskSource.MANUAL.value,

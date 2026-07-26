@@ -670,7 +670,8 @@ const _hoisted_18 = { key: 3 };
 const _hoisted_19 = { key: 4 };
 const _hoisted_20 = { key: 5 };
 const _hoisted_21 = { key: 6 };
-const _hoisted_22 = { class: "task-actions" };
+const _hoisted_22 = { key: 7 };
+const _hoisted_23 = { class: "task-actions" };
 
 
 const _sfc_main$2 = {
@@ -749,6 +750,14 @@ function progressValue(task) {
 
 function showProgress(task) {
   return ['pending', 'in_progress', 'completed', 'failed', 'cancelled', 'ignored', 'no_audio'].includes(task?.status)
+}
+
+function qualitySummary(task) {
+  const report = task?.subtitle_quality_report || {};
+  if (!Object.keys(report).length) return ''
+  let summary = '质检：超长 ' + (report.overlong || 0) + '｜超速 ' + (report.over_speed || 0);
+  summary += '｜重叠 ' + (report.overlap || 0) + '｜已修复 ' + (report.auto_fixed || 0);
+  return report.remaining ? summary + '｜需注意 ' + report.remaining : summary
 }
 
 return (_ctx, _cache) => {
@@ -834,22 +843,25 @@ return (_ctx, _cache) => {
                     (task.asr_model_reason)
                       ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_17, _toDisplayString$1(task.asr_model_reason), 1))
                       : _createCommentVNode$1("", true),
+                    (qualitySummary(task))
+                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_18, _toDisplayString$1(qualitySummary(task)), 1))
+                      : _createCommentVNode$1("", true),
                     (task.output_name)
-                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_18, "输出：" + _toDisplayString$1(task.output_name), 1))
+                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_19, "输出：" + _toDisplayString$1(task.output_name), 1))
                       : _createCommentVNode$1("", true),
                     _createElementVNode$2("span", null, _toDisplayString$1(task.add_time || '-'), 1),
                     _createElementVNode$2("span", null, _toDisplayString$1(task.complete_time || '-'), 1),
                     (task.queue_position === 0)
-                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_19, "当前处理"))
+                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_20, "当前处理"))
                       : (task.queue_position)
-                        ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_20, "队列第 " + _toDisplayString$1(task.queue_position) + " 位", 1))
+                        ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_21, "队列第 " + _toDisplayString$1(task.queue_position) + " 位", 1))
                         : _createCommentVNode$1("", true),
                     (task.message)
-                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_21, _toDisplayString$1(task.message), 1))
+                      ? (_openBlock$2(), _createElementBlock$1("span", _hoisted_22, _toDisplayString$1(task.message), 1))
                       : _createCommentVNode$1("", true)
                   ])
                 ]),
-                _createElementVNode$2("div", _hoisted_22, [
+                _createElementVNode$2("div", _hoisted_23, [
                   _createVNode$2(_component_VBtn, {
                     size: "small",
                     color: "warning",
@@ -894,7 +906,7 @@ return (_ctx, _cache) => {
 }
 
 };
-const TaskTable = /*#__PURE__*/_export_sfc(_sfc_main$2, [['__scopeId',"data-v-b0c29cd6"]]);
+const TaskTable = /*#__PURE__*/_export_sfc(_sfc_main$2, [['__scopeId',"data-v-7236a5c6"]]);
 
 const {createElementVNode:_createElementVNode$1,toDisplayString:_toDisplayString,resolveComponent:_resolveComponent$1,createVNode:_createVNode$1,createTextVNode:_createTextVNode,withCtx:_withCtx,openBlock:_openBlock$1,createBlock:_createBlock$1} = await importShared('vue');
 

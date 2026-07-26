@@ -38,6 +38,7 @@ from .pipeline.asr_service import AsrService
 from .pipeline.generation_pipeline import GenerationPipeline
 from .pipeline.subtitle_output import SubtitleOutputService
 from .pipeline.subtitle_cleanup import SubtitleCleanupService
+from .pipeline.subtitle_layout import SubtitleLayoutService
 from .pipeline.translation_service import TranslationService
 from .storage.task_store import TaskStore
 from .tasks.api import AutoSubTaskApi
@@ -62,7 +63,7 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
     # 主题色
     plugin_color = "#2C4F7E"
     # 插件版本
-    plugin_version = "3.5.84"
+    plugin_version = "3.5.85"
     # 插件作者
     plugin_author = "ifsherlock"
     # 作者主页
@@ -115,6 +116,7 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
     _runtime_updater = None
     _subtitle_output = None
     _subtitle_cleanup = None
+    _subtitle_layout = None
     _asr_service = None
     _translation_service = None
     _generation_pipeline = None
@@ -166,6 +168,13 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
         self._skip_chinese = config.get('skip_chinese', False)
         self._max_segment_duration = float(config.get('max_segment_duration')) if config.get('max_segment_duration') else 8.0
         self._max_segment_chars = int(config.get('max_segment_chars')) if config.get('max_segment_chars') else 50
+        self._subtitle_layout_settings = {
+            "subtitle_max_lines": config.get("subtitle_max_lines", 2),
+            "subtitle_max_chars_per_line": config.get("subtitle_max_chars_per_line", 16),
+            "subtitle_min_duration": config.get("subtitle_min_duration", 0.9),
+            "subtitle_max_duration": config.get("subtitle_max_duration", 5.5),
+            "subtitle_max_reading_speed": config.get("subtitle_max_reading_speed", 14.0),
+        }
         self._translate_zh = config.get('translate_zh', False)
         if self._translate_zh:
             # AutoSubv3 使用插件自己的独立 LLM 配置。这里禁止读取 MoviePilot
@@ -282,6 +291,39 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
             self._subtitle_cleanup = SubtitleCleanupService(lambda: bool(getattr(self, '_clean_ai_sdh', True)))
         return self._subtitle_cleanup
 
+    def _get_subtitle_layout(self) -> SubtitleLayoutService:
+        if not self._subtitle_layout:
+            self._subtitle_layout = SubtitleLayoutService(self._subtitle_layout_settings)
+        return self._subtitle_layout
+
+    def _current_translation_context(self) -> str:
+        task = self._current_processing_task
+        if not task:
+            return ""
+        if task.tmdb_id and not task.media_overview:
+            try:
+                from app.chain.tmdb import TmdbChain
+                from app.schemas.types import MediaType
+
+                media_type = MediaType.TV if str(task.media_type).lower() in ("tv", "show", "series") else MediaType.MOVIE
+                media = TmdbChain().recognize_media(tmdbid=int(task.tmdb_id), mtype=media_type)
+                if media:
+                    task.media_title = task.media_title or str(getattr(media, "title", "") or "")
+                    task.media_overview = task.media_overview or str(getattr(media, "overview", "") or "")
+                    actors = getattr(media, "actors", None) or getattr(media, "cast", None) or []
+                    if not task.media_cast and actors:
+                        task.media_cast = ", ".join(str(getattr(actor, "name", actor)) for actor in actors[:12])
+            except Exception as exc:
+                logger.debug("AutoSubv3 TMDB context lookup skipped: %s", exc)
+        fields = [
+            ("TMDB", task.tmdb_id), ("Media type", task.media_type),
+            ("Season", task.season), ("Episode", task.episode),
+            ("Title", task.media_title), ("Overview", task.media_overview),
+            ("Cast", task.media_cast), ("Glossary", task.glossary),
+        ]
+        values = [f"{name}: {value}" for name, value in fields if value]
+        return "Task media context:\n" + "\n".join(values) if values else ""
+
     def _get_asr_service(self) -> AsrService:
         if not self._asr_service:
             self._asr_service = AsrService(
@@ -320,6 +362,7 @@ class AutoSubv3(AutoSubv3CompatMixin, _PluginBase):
                 lambda: self._context_window,
                 lambda: self._max_retries,
                 lambda: self._max_translation_failure_rate,
+                self._current_translation_context,
                 lambda percent, stage, message: self._update_current_task_progress(percent, stage, message, save=True),
             )
         return self._translation_service

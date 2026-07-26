@@ -274,13 +274,12 @@ class AsrService:
 
     def merge_srt(self, subtitle_data, max_duration=None, max_chars=None):
         if max_duration is None:
-            max_duration = self._max_segment_duration() or 8.0
+            max_duration = min(float(self._max_segment_duration() or 5.5), 5.5)
         if max_chars is None:
-            max_chars = self._max_segment_chars() or 30
+            max_chars = self._max_segment_chars() or 32
 
         subtitle_data = copy.deepcopy(subtitle_data)
         merged_subtitle = []
-        sentence_end = True
         end_tokens = ('.', '!', '?', '。', '！', '？', '。"', '！"', '？"', '."', '!"', '?"')
         soft_break_tokens = (',', ';', ':', '，', '；', '：', '、')
 
@@ -289,32 +288,6 @@ class AsrService:
 
         def duration_seconds(item):
             return (item.end - item.start).total_seconds()
-
-        def should_soft_break(item):
-            content = item.content.rstrip()
-            return (
-                content.endswith(soft_break_tokens)
-                and (duration_seconds(item) >= max_duration * 0.55 or text_len(content) >= max_chars * 0.65)
-            )
-
-        def append_or_extend(item):
-            nonlocal sentence_end
-            if not merged_subtitle or sentence_end:
-                merged_subtitle.append(item)
-                sentence_end = False
-                return
-
-            current = merged_subtitle[-1]
-            candidate_duration = (item.end - current.start).total_seconds()
-            candidate_chars = text_len(current.content) + text_len(item.content)
-            force_split = candidate_duration > max_duration or candidate_chars > max_chars
-            if force_split:
-                merged_subtitle.append(item)
-                sentence_end = False
-                return
-
-            current.content = f"{current.content} {item.content}".strip()
-            current.end = item.end
 
         for item in subtitle_data:
             content = item.content.replace('\n', ' ').strip()
@@ -325,24 +298,22 @@ class AsrService:
                 continue
             item.content = content
 
-            if self.is_noisy_subtitle(content):
+            if self.is_noisy_subtitle(content) or not merged_subtitle:
                 merged_subtitle.append(item)
-                sentence_end = True
                 continue
-
-            append_or_extend(item)
-
             current = merged_subtitle[-1]
-            if content.endswith(end_tokens):
-                sentence_end = True
-            elif should_soft_break(current):
-                sentence_end = True
-            elif duration_seconds(current) >= max_duration:
-                sentence_end = True
-            elif text_len(current.content) >= max_chars:
-                sentence_end = True
-            else:
-                sentence_end = False
+            pause = max(0.0, (item.start - current.end).total_seconds())
+            candidate_duration = (item.end - current.start).total_seconds()
+            candidate_chars = text_len(current.content) + text_len(content)
+            strong_boundary = current.content.rstrip().endswith(end_tokens) or pause >= 0.55
+            soft_boundary = (current.content.rstrip().endswith(soft_break_tokens) and
+                             (pause >= 0.32 or duration_seconds(current) >= max_duration * 0.5 or
+                              text_len(current.content) >= max_chars * 0.65))
+            if strong_boundary or soft_boundary or candidate_duration > max_duration or candidate_chars > max_chars:
+                merged_subtitle.append(item)
+                continue
+            current.content = f"{current.content} {content}".strip()
+            current.end = item.end
 
         for index, item in enumerate(merged_subtitle, 1):
             item.index = index

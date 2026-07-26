@@ -153,7 +153,20 @@ class GenerationPipeline:
                         cleanup_stats.removed_speaker_labels,
                         cleanup_stats.removed_sdh_lines,
                     )
-                plugin._update_current_task_progress(96, "write_output", "写入翻译字幕", save=True)
+                plugin._update_current_task_progress(96, "quality_check", "检查字幕显示规范与时间轴", save=True)
+                quality_report = plugin._get_subtitle_layout().process_file(
+                    translated_subtitle,
+                    bilingual=plugin._subtitle_output_mode == "bilingual",
+                )
+                if plugin._current_processing_task:
+                    plugin._current_processing_task.subtitle_quality_report = quality_report
+                    plugin.save_tasks()
+                self._logger.info(
+                    "字幕质检完成：超长=%s 超速=%s 重叠=%s 自动修复=%s 剩余注意=%s",
+                    quality_report["overlong"], quality_report["over_speed"], quality_report["overlap"],
+                    quality_report["auto_fixed"], quality_report["remaining"],
+                )
+                plugin._update_current_task_progress(98, "write_output", "写入翻译字幕", save=True)
                 self._logger.info(f"翻译字幕完成：{os.path.basename(translated_subtitle)}")
                 if plugin._current_processing_task:
                     plugin._current_processing_task.output_path = translated_subtitle

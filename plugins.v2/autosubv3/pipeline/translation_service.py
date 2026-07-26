@@ -33,6 +33,7 @@ class TranslationService:
         context_window: Callable[[], int],
         max_retries: Callable[[], int],
         max_translation_failure_rate: Callable[[], float],
+        task_context: Callable[[], str] = None,
         progress_callback: Callable[[int, str, str], None] = None,
     ):
         self._logger = logger
@@ -52,6 +53,7 @@ class TranslationService:
         self._context_window = context_window
         self._max_retries = max_retries
         self._max_translation_failure_rate = max_translation_failure_rate
+        self._task_context = task_context or (lambda: "")
         self._progress_callback = progress_callback or (lambda percent, stage, message: None)
 
     @staticmethod
@@ -83,7 +85,9 @@ class TranslationService:
             status = "[待译]" if idx in target_indices else ""
             content = all_subs[idx].content.replace('\n', ' ').strip()
             context.append(f"{status}{content}")
-        return "\n".join(context)
+        task_context = self._task_context().strip()
+        context_text = "\n".join(context)
+        return f"{task_context}\n\n{context_text}" if task_context else context_text
 
     def translate_to_zh(self, text: str, context: str = None, max_retries: int = None) -> str:
         self._raise_if_task_cancelled()
