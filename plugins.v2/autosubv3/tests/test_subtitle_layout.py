@@ -50,6 +50,16 @@ class SubtitleLayoutServiceTests(unittest.TestCase):
         for item in subtitles:
             self.assertLessEqual(len(item.content.replace("\n", "")), 32)
 
+    def test_uses_following_gap_for_multiple_playable_cues(self):
+        subtitle = srt.Subtitle(1, timedelta(seconds=0), timedelta(seconds=3), "这是一段明显超过两行容量的中文字幕，需要拆成多条并在后续足够的时间空档中分别保持合理的阅读速度")
+        following = srt.Subtitle(2, timedelta(seconds=12), timedelta(seconds=13), "下一句")
+        subtitles = [subtitle, following]
+        self.service.process_subtitles(subtitles)
+        self.assertGreaterEqual(len(subtitles), 3)
+        self.assertLessEqual(subtitles[-2].end, following.start)
+        for item in subtitles[:-1]:
+            self.assertLessEqual((item.end - item.start).total_seconds(), 5.5)
+
 
 if __name__ == "__main__":
     unittest.main()

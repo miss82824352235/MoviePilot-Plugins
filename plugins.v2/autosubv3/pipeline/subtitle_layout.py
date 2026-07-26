@@ -93,7 +93,7 @@ class SubtitleLayoutService:
         if len(chunks) < 2:
             return []
         required = max(self.min_duration * len(chunks), self._display_length(text) / self.max_reading_speed)
-        available_end = item.start + timedelta(seconds=min(self.max_duration, required))
+        available_end = item.start + timedelta(seconds=min(self.max_duration * len(chunks), required))
         if next_start:
             available_end = min(available_end, next_start - timedelta(milliseconds=40))
         if (available_end - item.start).total_seconds() + 1e-6 < required:
